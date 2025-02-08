@@ -1,0 +1,28 @@
+{
+  "name": "blr",
+  "version": "1.0.0",
+  "license": "MIT",
+  "scripts": {
+    "build": "tsc",
+    "dev": "ts-node src/app.ts",
+    "serve": "tsc && node dist/app.js"
+  },
+  "dependencies": {
+    "@types/fluent-ffmpeg": "^2.1.27",
+    "@types/node": "^22.13.1",
+    "@types/request": "^2.48.12",
+    "@types/ws": "^8.5.14",
+    "axios": "^1.7.9",
+    "fluent-ffmpeg": "^2.1.3",
+    "i18next": "^24.2.2",
+    "moment": "^2.30.1",
+    "pino": "^9.6.0",
+    "pino-pretty": "^13.0.0",
+    "request": "^2.88.2",
+    "sqlite3": "^5.1.7",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.7.3",
+    "uuid": "^11.0.5",
+    "ws": "^8.18.0"
+  }
+}

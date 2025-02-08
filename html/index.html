@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
+  <script src="./flv.min.js"></script>
+  <title>BLR Live</title>
+  <style>
+    body {
+        margin: 0;
+        padding: 0;
+    }
+    .v-container {
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+    }
+  </style>
+</head>
+<body>
+  <div class="v-container">
+	  <video id="videoElement" muted autoplay="autoplay" preload="auto" ></video>
+  </div>
+</body>
+</html>
+<script>
+	if (flvjs.isSupported()) {
+    var videoElement = document.getElementById('videoElement');
+    var flvPlayer = flvjs.createPlayer({
+      type: 'flv', // 指定视频类型，特别注意此处伟flv
+      isLive: true, // 开启直播
+      hasAudio: false, // 需要设置为false不然播放不了视频
+      cors: true,  // 开启跨域访问
+      url: 'xxx'
+    },
+    {
+      enableWorker: false, //不启用分离线程
+      enableStashBuffer: false, //关闭IO隐藏缓冲区
+      reuseRedirectedURL: true, //重用301/302重定向url，用于随后的请求，如查找、重新连接等。
+      autoCleanupSourceBuffer: true //自动清除缓存
+    });
+    flvPlayer.attachMediaElement(videoElement);
+    flvPlayer.load();
+    flvPlayer.play(); //开始播放
+    // flvPlayer.stop(); //停止播放时打开
+  }
+</script>
