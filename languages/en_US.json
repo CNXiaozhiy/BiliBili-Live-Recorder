@@ -77,7 +77,7 @@
     "TEXT_CODE_a517f96b": "Unsubscribe all",
     "TEXT_CODE_8ed4f929": "Exit",
     "TEXT_CODE_64555daa": "Your subscribed live rooms",
-    "TEXT_CODE_1bccf05b": "Live Room Title: {{title}}\nLive Status: {{liveStatus}}\nRecording Status: {{recStatus}}\nLive Room Description: {{description}}\nPopularity🔥: {{online}}\nLive Start Time: {{liveTime}}\nLive Room ID: {{id}}",
+    "TEXT_CODE_1bccf05b": "Live Room Title: {{title}}\nLive Status: {{liveStatus}}\nRecording Status: {{recStatus}}\nLive Room Description: {{description}}\nPopularity🔥: {{online}}\nLive Start Time: {{liveTime}}\nLive Room ID: {{id}}\n\n{{url}}",
     "TEXT_CODE_ca6361c4": "Your subscribed live rooms recording status",
     "TEXT_CODE_670a5281": "{{id}}\nRecording Status: {{recStatus}}",
     "TEXT_CODE_16fc8c6f": "{{id}}\nRecording Status: {{recStatus}}\nRecording Duration: {{timemark}}\nFrame Rate: {{fps}}",
@@ -92,6 +92,6 @@
     "TEXT_CODE_560f94fc": "Live Room Information\n\nLive Room ID: {{id}}\nLive Room Description: {{description}}\nLive Start Time: {{liveTime}}\nLive End Time: {{endTime}}\n\nRecorded by Xz-BLR System",
     "TEXT_CODE_75fe8a3e": "This live recording has been submitted to Bilibili✔️\n\n📽️Video URL: https://www.bilibili.com/video/{{bvid}}\n❕Reminder: Video review takes time\n\nXz-BLR System",
     "TEXT_CODE_35bd8fb2": "This live recording submission failed❌\n\nWaiting for manual submission⚙️...\nError log recorded\n\nXz-BLR System",
-    "TEXT_CODE_3aa85bfe": "Your subscribed live room has started streaming🟢\n\nLive Room Title: {{title}}\nℹLive Room Description: {{description}}\nPopularity🔥: {{online}}\nLive Start Time: {{liveTime}}\nLive Room ID: {{id}}",
+    "TEXT_CODE_3aa85bfe": "Your subscribed live room has started streaming🟢\n\nLive Room Title: {{title}}\nℹLive Room Description: {{description}}\nPopularity🔥: {{online}}\nLive Start Time: {{liveTime}}\nLive Room ID: {{id}}\n\n{{url}}",
     "TEXT_CODE_0344d6ee": "Your subscribed live room has ended streaming🔴\n\nLive Room Title: {{title}}\nLive Room ID: {{id}}\n\nXz-BLR System"
 }

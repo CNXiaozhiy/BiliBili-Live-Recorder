@@ -515,7 +515,8 @@ const app = async () => {
                                                     description: room_info.description || '无',
                                                     online: room_info.online,
                                                     liveTime: room_info.live_time,
-                                                    id: room_info.room_id
+                                                    id: room_info.room_id,
+                                                    url: `https://live.bilibili.com/${room_info.room_id}`
                                                 } }) + '\n\n'
                                             }
                                         }
@@ -816,8 +817,9 @@ const app = async () => {
                                 title: room_info.title,
                                 description: room_info.description || '无',
                                 online: room_info.online,
-                                live_time: room_info.live_time,
-                                id: room_info.room_id
+                                liveTime: room_info.live_time,
+                                id: room_info.room_id,
+                                url: `https://live.bilibili.com/${room_info.room_id}`
                             }}) + '\n\n' } }
                         ]
 

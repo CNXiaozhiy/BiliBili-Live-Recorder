@@ -17,6 +17,7 @@ export default class BiliLiveAutoRecorder {
         this.recorder = new BiliLiveRecorder({ roomId: options.roomId, saveRecordFolder: options.saveRecordFolder });
 
         this.monitor.startMonitor();
+        this.installAutoRecordEventListener();
     }
 
     private installAutoRecordEventListener() {
