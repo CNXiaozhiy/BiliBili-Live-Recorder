@@ -20,6 +20,11 @@ export default class BiliLiveAutoRecorder {
         this.installAutoRecordEventListener();
     }
 
+    public destroy() {
+        this.monitor.destroy();
+        this.recorder.destroy();
+    }
+
     private installAutoRecordEventListener() {
         this.monitor.on('live-start', () => {
             try {

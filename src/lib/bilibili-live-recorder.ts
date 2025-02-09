@@ -48,7 +48,7 @@ export default class BiliLiveRecorder extends EventEmitter<BiliRecorderEventType
         this.recStatus = 0;
     }
 
-    stop() {
+    public stop() {
         return {
             kill: async () => {
                 if (!this.recCommand ||this.recCommand.ffmpegProc || !this.recCommand.ffmpegProc.stdin) return;
@@ -70,11 +70,16 @@ export default class BiliLiveRecorder extends EventEmitter<BiliRecorderEventType
         }
     }
 
-    async rec() {
+    public async rec() {
         const outputFilePath = this.recordFilePath;
         
         if (fs.existsSync(outputFilePath)) {
-            fs.unlinkSync(outputFilePath);
+            try {
+                fs.unlinkSync(outputFilePath);
+            } catch (e) {
+                this.emit('rec-error', e);
+                return;
+            }
         }
         const streamUrl = await getLiveStreamUrl(this.roomId);
         
@@ -83,6 +88,12 @@ export default class BiliLiveRecorder extends EventEmitter<BiliRecorderEventType
         this.recCommand = ffmpeg(streamUrl)
         .output(outputFilePath)
         .outputOptions('-c copy')
+        .addOption('-timeout', '5000000') // 5秒超时
+        .addOption('-reconnect', '1') // 启用自动重连
+        .addOption('-reconnect_at_eof', '1')
+        .addOption('-reconnect_streamed', '1')
+        .addOption('-reconnect_delay_max', '5')
+
         .on('start', (commandLine) => {
             this.recStartTime = new Date();
             this.emit('rec-start', commandLine);
@@ -132,18 +143,25 @@ export default class BiliLiveRecorder extends EventEmitter<BiliRecorderEventType
             
         })
         .on('error', (err) => {
+            if (err.message.includes('ffmpeg was killed with signal')) return;
             this.emit('rec-error', err);
 
             alertError(err, $t('TEXT_CODE_4c7d3c19'));
-
-            this.stop().kill();
-            fs.unlink(outputFilePath, (err) => {});
-            this.rec();
-        });
+        })
+        .on('stderr', (stderrLine) => {
+            
+        })
 
         // 开始录制
         this.recCommand.run();
 
         return this;
+    }
+
+    public destroy() {
+        if (this.recCommand) this.recCommand.kill('SIGKILL');
+        if (this.recConvertCommmand) this.recConvertCommmand.kill('SIGKILL');
+
+        this.off('all')
     }
 }

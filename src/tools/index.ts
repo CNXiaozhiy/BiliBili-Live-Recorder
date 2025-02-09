@@ -1,10 +1,10 @@
-import axios from 'axios'
+import { makeRequest } from "../lib/http"
 
 export async function getImageBase64FromUrl(url: string): Promise<string> {
-    const res = await axios({
-    method: 'GET',
-    url: url,
-    responseType: 'arraybuffer',
+    const res = await makeRequest<any>({
+      method: 'GET',
+      url: url,
+      responseType: 'arraybuffer',
     })
 
     return new Promise((resolve) => {

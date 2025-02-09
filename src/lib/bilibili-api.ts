@@ -1,8 +1,8 @@
 import { BiliLiveRoomInfo, BiliLiveRoomPlayInfo } from "index";
-import axios from "axios";
 import request from 'request';
 import logger from "../logger";
 import { $t } from "../i18n";
+import { makeRequest } from "./http";
 
 const quality_description = {
     1: '原画',
@@ -49,7 +49,7 @@ async function getLiveStreamUrl(roomId: string | number): Promise<string> {
 
     for (let i = 1; i <= 10; i++) {
         // 获取直播流地址
-        const playUrlResponse = await axios.get(playUrl);
+        const playUrlResponse = await makeRequest<{ code: number, data: BiliLiveRoomPlayInfo, message: string }>({ url: playUrl });
 
         if (playUrlResponse.data.code !== 0) {
             throw new Error(playUrlResponse.data.message);
@@ -68,11 +68,11 @@ async function getLiveStreamUrl(roomId: string | number): Promise<string> {
     }
 
     if (!streamUrl) {
-        const playUrlResponse = await axios.get(playUrl);
+        const playUrlResponse = await makeRequest<{ code: number, data: BiliLiveRoomPlayInfo, message: string }>({ url: playUrl });
 
         for (let item of playUrlResponse.data.data.durl) {
             if (await testStreamUrl(item.url) === 200) {
-                logger.info($t('TEXT_CODE_cf9d449d', { replace: { quality: map_quality_description.get(item.order) || '未知' } }));
+                logger.info($t('TEXT_CODE_cf9d449d', { replace: { quality: map_quality_description.get(item.order.toString()) || '未知' } }));
                 streamUrl = item.url;
                 break;
             }
@@ -86,7 +86,7 @@ async function getLiveStreamUrl(roomId: string | number): Promise<string> {
 
 async function getLiveRoomInfo (roomId: string | number): Promise<BiliLiveRoomInfo> {
     const roomInfoUrl = `https://api.live.bilibili.com/room/v1/Room/get_info?room_id=${roomId}`;
-    const roomInfoResponse = await axios.get(roomInfoUrl, { headers: { 'User-Agent': 'Mozilla/5.0', timeout: 120000 } });
+    const roomInfoResponse = await makeRequest<{ code: number, data: BiliLiveRoomInfo, message: string }>({ url: roomInfoUrl, timeout: 120000 });
     if (roomInfoResponse.data.code !== 0) {
         throw new Error(roomInfoResponse.data.message);
     }

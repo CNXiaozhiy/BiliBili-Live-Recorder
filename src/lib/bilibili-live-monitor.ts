@@ -62,4 +62,9 @@ export default class BiliLiveMonitor extends EventEmitter<BiliLiveMonitorEvents>
 
         return this;
     }
+
+    destroy() {
+        this.stopMonitor();
+        this.off('all');
+    }
 }

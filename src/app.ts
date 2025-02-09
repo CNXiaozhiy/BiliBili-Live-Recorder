@@ -5,7 +5,6 @@
 
 const version = "1.0.0";
 
-import { getLiveRoomInfo } from "./lib/bilibili-api";
 import { colorize, getImageBase64FromUrl } from './tools';
 import { statusToString } from './tools/format';
 import moment from "moment";
@@ -14,8 +13,9 @@ import sqlite3 from "sqlite3";
 import { DBSubscribeTableRows } from "index";
 import config from "./config";
 
-import BiliLiveAutoRecorder from "./lib/bilibili-live-auto-recoder";
+import BiliLiveAutoRecorder from "./lib/bilibili-live-auto-recorder";
 import BiliUploader from "./lib/bilibili-uploader";
+import { getLiveRoomInfo } from "./lib/bilibili-api";
 import XzQBot from "./lib/xz-qbot";
 
 import { alertError, setNotifyAdapter } from "./core/error-alarms";
@@ -222,6 +222,7 @@ const app = async () => {
                                 if (!roomInfo.uid) throw new Error($t('TEXT_CODE_78e760ba'))
     
                                 subscribe(room_id, gid, qid)
+                                map_waitSend.delete(`${gid}_${qid}`)
     
                             } catch (error: any) {
                                 error.message !== $t('TEXT_CODE_78e760ba') && alertError(error, $t('TEXT_CODE_da1deb89'))
@@ -502,7 +503,7 @@ const app = async () => {
                                     const aRecoder = map_ARecorders.get(room_id)
                                     if (!aRecoder) continue
     
-                                    const recoder = aRecoder.recorder;
+                                    const recorder = aRecoder.recorder;
     
                                     message.push(...[{ type: 'image', data: { url: room_info.user_cover }
                                         },{
@@ -511,7 +512,7 @@ const app = async () => {
                                                 text: $t('TEXT_CODE_1bccf05b', { replace: {
                                                     title: room_info.title,
                                                     liveStatus: statusToString('liveStatus', room_info.live_status),
-                                                    recStatus: statusToString('recStatus', recoder.recStatus),
+                                                    recStatus: statusToString('recStatus', recorder.recStatus),
                                                     description: room_info.description || '无',
                                                     online: room_info.online,
                                                     liveTime: room_info.live_time,
@@ -679,11 +680,20 @@ const app = async () => {
         }
     })
 
-    // 安装 BLR AutoRecorder
+    // 刷新 BLR AutoRecorder
     function refreshARecorders() {
         subs.all('SELECT * FROM subscribe').then((rows) => {
 
             const map_room = new Map();
+
+            // 释放无订阅的房间
+            map_ARecorders.forEach((aRecorder: BiliLiveAutoRecorder, room_id: number) => {
+                if (!rows.find(row => row.room_id === room_id)) {
+                    logger.info($t('TEXT_CODE_19d6f339', { replace: { code: colorize('yellow', room_id.toString()) } }));
+                    aRecorder.destroy();
+                    map_ARecorders.delete(room_id);
+                }
+            })
 
             rows.forEach(row => {
                 !Array.isArray(map_room.get(row.room_id)) && map_room.set(row.room_id, []);
@@ -745,7 +755,7 @@ const app = async () => {
                     })
                 })
 
-                aRecorder.recorder.on('rec-convert-end', async (file) => {
+                aRecorder.recorder.on('rec-end', async (file) => {
                     logger.info($t('TEXT_CODE_8cb95161'), room_id);
 
                     map_groupSend.forEach(async (user_ids, group_id) => {

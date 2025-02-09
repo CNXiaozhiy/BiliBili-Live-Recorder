@@ -1,11 +1,9 @@
-import axios from "axios";
 import fs from "fs";
 import path from "path";
 import { BiliUploaderOptions } from "index";
 import logger from "../logger";
 import { $t } from "../i18n";
-
-axios.defaults.headers['User-Agent'] = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36';
+import { makeRequest } from "./http";
 
 export default class BiliUploader {
     cookie: string;
@@ -14,8 +12,6 @@ export default class BiliUploader {
     constructor(cookie: string, CHUNK_SIZE = 5 * 1024 * 1024) {
         this.CHUNK_SIZE = CHUNK_SIZE;
         this.cookie = cookie
-
-        axios.defaults.headers.common['Cookie'] = cookie;
     }
 
     async upload(options: BiliUploaderOptions) {
@@ -32,26 +28,36 @@ export default class BiliUploader {
         const totalChunks = Math.ceil(video_file_size / this.CHUNK_SIZE);
     
         // 预上传 - 注册视频存储空间
-        const res = await axios.get(`https://member.bilibili.com/preupload?name=${video_file_name}&r=upos&profile=ugcupos%2Fbup&ssl=0&size=${video_file_size}&version=2.8.9`)
+
+        const res_1 = await makeRequest<{ OK: number, upos_uri: string, endpoint: string, auth: string, biz_id: string }>({
+            url: `https://member.bilibili.com/preupload?name=${video_file_name}&r=upos&profile=ugcupos%2Fbup&ssl=0&size=${video_file_size}&version=2.8.9`,
+            headers: {
+                Cookie: this.cookie
+            }
+        })
+
+        if (res_1.data.OK !== 1) throw new Error('预上传失败');
+
+        const { data: { endpoint, auth, biz_id } } = res_1;
     
-        if (res.data.OK !== 1) throw new Error('预上传失败');
-    
-        const { data } = res;
-    
-        const upos_uri = data.upos_uri.replace('upos://', '');
-        const upload_url = `https:${data.endpoint}/${upos_uri}`
+        // 整理信息
+        const upos_uri = res_1.data.upos_uri.replace('upos://', '');
+        const upload_url = `https:${endpoint}/${upos_uri}`
+        const bili_file_name = path.parse(upos_uri).name;
     
         // 获取上传ID
-        const res_2 = await axios.post(upload_url + '?uploads&output=json', {},
-            {
-                headers: {
-                    'X-Upos-Auth': data.auth
-                }
+        const res_2 = await makeRequest<{ OK: number, bucket: string, key: string, upload_id: string }>({
+            method: 'POST',
+            url: upload_url + '?uploads&output=json',
+            headers: {
+                'X-Upos-Auth': auth,
+                Cookie: this.cookie
             }
-        )
-    
-        const upload_id = res_2.data.upload_id;
-        const bili_file_name = path.parse(upos_uri).name;
+        })
+
+        if (res_2.data.OK !== 1) throw new Error('获取上传ID失败');
+
+        const { data: { upload_id } } = res_2;
     
         // 分片上传
         for (let i = 0; i < totalChunks; i++) {
@@ -73,80 +79,98 @@ export default class BiliUploader {
               total: `${video_file_size}`
             });
 
-            const response = await axios.put(`${upload_url}?${params.toString()}`, chunk, {
+            const resp = await makeRequest({
+                method: 'PUT',
+                url: `${upload_url}?${params.toString()}`,
                 headers: {
                     'Content-Type': 'application/octet-stream',
-                    'X-Upos-Auth': data.auth
-                }
-            });
+                    'X-Upos-Auth': auth,
+                    Cookie: this.cookie
+                },
+                data: chunk
+            })
     
-            logger.info($t('TEXT_CODE_704248b8', { replace: { index: i + 1, total: totalChunks } }), response.data);
-
+            logger.info($t('TEXT_CODE_704248b8', { replace: { index: i + 1, total: totalChunks } }), resp.data);
         }
     
         // 合片
-        const res_3 = await axios.post(`${upload_url}?output=json&name=${video_file_name}&profile=ugcupos%2Fbup&uploadId=${upload_id}&biz_id=${data.biz_id}`, {}, {
+        const res_3 = await makeRequest<{ OK: number, location: string, bucket: string, key: string }>({
+            method: 'POST',
+            url: `${upload_url}?output=json&name=${video_file_name}&profile=ugcupos%2Fbup&uploadId=${upload_id}&biz_id=${biz_id}`,
             headers: {
-                'X-Upos-Auth': data.auth
+                'X-Upos-Auth': auth,
+                Cookie: this.cookie
             }
         })
 
         if (res_3.data.OK !== 1) throw new Error('合片失败');
     
         // 上传封面
-        const res_4 = await axios.post(`https://member.bilibili.com/x/vu/web/cover/up`, {
-            csrf,
-            cover: cover_base64,
-        }, {
+        const res_4 = await makeRequest<{ code: number, message: string, ttl: number, data: { url: string } }>({
+            method: 'POST',
+            url: `https://member.bilibili.com/x/vu/web/cover/up`,
             headers: {
-                'Content-Type': 'multipart/form-data'
+                'Content-Type': 'multipart/form-data',
+                Cookie: this.cookie
+            },
+            data: {
+                csrf,
+                cover: cover_base64,
             }
         })
-
+        
         if (res_4.data.code !== 0) throw new Error('上传封面失败');
+
+        const { data: { url: cover_url } } = res_4.data;
     
         // 投稿视频
-        const res_5 = await axios.post(`https://member.bilibili.com/x/vu/web/add/v3?csrf=${csrf}`, {
-            csrf,
-            cover: res_4.data.data.url,
-            title: video_info.title,
-            copyright: 1,
-            tid: video_info.tid || 27,
-            tag: video_info.tag || '直播录像',
-            desc_format_id: 0,
-            desc: video_info.description,
-            recreate: -1,
-            dynamic: '',
-            interactive: 0,
-            videos: [
-                {
-                    filename: bili_file_name,
-                    title: '',
-                    desc: '',
-                    cid: 0
-                }
-            ],
-            act_reserve_create: 0,
-            no_disturbance: 0,
-            adorder_type: 9,
-            no_reprint: 1,
-            subtitle: {
-                open: 0,
-                lan: ''
-            },
-            dolby: 0,
-            lossless_music: 0,
-            up_selection_reply: false,
-            up_close_reply: false,
-            up_close_danmu: false,
-            web_os: 1,
-        }, {
+        const res_5 = await makeRequest<{ code: number,message: string, ttl: number, data: { aid: number, bvid: string } }>({
+            method: 'POST',
+            url: `https://member.bilibili.com/x/vu/web/add/v3?csrf=${csrf}`,
             headers: {
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/json',
+                Cookie: this.cookie
+            },
+            data: {
+                csrf,
+                cover: cover_url,
+                title: video_info.title,
+                copyright: 1,
+                tid: video_info.tid || 27,
+                tag: video_info.tag || '直播录像',
+                desc_format_id: 0,
+                desc: video_info.description,
+                recreate: -1,
+                dynamic: '',
+                interactive: 0,
+                videos: [
+                    {
+                        filename: bili_file_name,
+                        title: '',
+                        desc: '',
+                        cid: 0
+                    }
+                ],
+                act_reserve_create: 0,
+                no_disturbance: 0,
+                adorder_type: 9,
+                no_reprint: 1,
+                subtitle: {
+                    open: 0,
+                    lan: ''
+                },
+                dolby: 0,
+                lossless_music: 0,
+                up_selection_reply: false,
+                up_close_reply: false,
+                up_close_danmu: false,
+                web_os: 1,
             }
         })
 
         if (res_5.data.code !== 0) throw new Error('投稿失败');
-        return res_5.data
+
+
+        return res_5.data.data
     }
 }

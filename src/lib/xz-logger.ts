@@ -25,9 +25,15 @@ export default class XzLogger {
         this.level = levels.indexOf(options.level || 'INFO');
     }
 
-    info(...msgs: any[]) { this.log(msgs, 'INFO'); }
+    trace(...msgs: any[]) { this.log(msgs, 'TRACE'); }
     debug(...msgs: any[]) { this.log(msgs, 'DEBUG') }
+    info(...msgs: any[]) { this.log(msgs, 'INFO'); }
+    notice(...msgs: any[]) { this.log(msgs, 'NOTICE') }
+    warn(...msgs: any[]) { this.log(msgs, 'WARNING') }
     error(...msgs: any[]) { this.log(msgs, 'ERROR') }
+    critical(...msgs: any[]) { this.log(msgs, 'CRITICAL') }
+    alert(...msgs: any[]) { this.log(msgs, 'ALERT') }
+    emergency(...msgs: any[]) { this.log(msgs, 'EMERGENCY') }
 
     private log(msgs: any[], level: LogLevel = 'INFO') {
         const levelInfo = this.logLevelInfoMap.get(level);
