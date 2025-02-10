@@ -102,7 +102,7 @@
     "TEXT_CODE_3ec89037":"{{id}} 直播录制发生错误❌\n\n正在尝试重新录制⚙️...",
     "TEXT_CODE_fcd1f98f":"{{id}} 直播录制已结束🔴\n\n直播录像正在转码中⚙️...",
     "TEXT_CODE_7ff48a7e":"{{id}} 直播录像转码完成✔️\n\n正在上传（投稿）至哔哩哔哩，请稍等⚙️...\n\n任务ID：{{taskID}}\n发送 '进度 id' 以查看投稿进度\n\nXz-BLR System",
-    "TEXT_CODE_cf485316":"【直播回放】{{title}} {{startTime}} 直播回放",
+    "TEXT_CODE_cf485316":"【{{name}}】【直播回放】{{title}} {{startTime}} 直播回放",
     "TEXT_CODE_560f94fc":"直播间信息\n\n直播间ID: {{id}}\n直播间简介: {{description}}\n开播时间: {{liveTime}}\n结束时间: {{endTime}}\n\n由 Xz-BLR 系统录制",
     "TEXT_CODE_75fe8a3e":"本次直播录像已投稿至Bilibili✔️\n\n📽️视频地址: https://www.bilibili.com/video/{{bvid}}\n❕温馨提示: 视频审核需要时间\n\nXz-BLR System",
     "TEXT_CODE_35bd8fb2":"本次直播录像投稿失败❌\n\n正在等待人工投稿⚙️...\n错误日志已记录\n\nXz-BLR System",

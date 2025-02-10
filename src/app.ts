@@ -1005,12 +1005,14 @@ const app = async () => {
                     const format_time_start = moment(aRecorder.recorder.recStartTime).format('yyyy-MM-DD HH:mm:ss');
                     const format_time_end = moment(aRecorder.recorder.recEndTime).format('yyyy-MM-DD HH:mm:ss');
 
+                    const user_info = await getUserInfo(room_info.uid);
 
                     uploader.createTask({
                         file_path: file.file_path,
                         cover_base64,
                         video: {
                             title: $t('TEXT_CODE_cf485316', { replace: {
+                                name: user_info.card.name,
                                 title: room_info.title,
                                 startTime: format_time_start,
                                 endTime: format_time_end
