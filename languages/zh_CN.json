@@ -64,7 +64,7 @@
     "TEXT_CODE_704248b8":"[Live Recorder]\tUploader -> 分片 {{index}} 上传完成✔️",
 
     "TIPS_LOG_WARN":"警告日志区域",
-    "TEXT_CODE_3199beaa":"由于当前无任何订阅数据，且未安装任何适配器看，程序可能在极短时间内结束运行。",
+    "TEXT_CODE_3199beaa":"由于当前无任何订阅数据，且未安装任何适配器，程序可能在极短时间内结束运行。",
     
     "TIPS_NORMAL":"正常常量区",
 
