@@ -2,7 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import ffmpeg from 'fluent-ffmpeg';
 import moment from 'moment';
-import config from '../config';
+import { config } from '../lib/d';
 
 import { getLiveStreamUrl } from './bilibili-api';
 import { BiliLiveRecorderOptions } from 'index';

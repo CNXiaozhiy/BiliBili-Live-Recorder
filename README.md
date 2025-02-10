@@ -1,11 +1,9 @@
-# BiliBili Live Recorder System (BLR)
+# 🎥 BiliBili Live Recorder (BLR)
 
-![Node.js Version](https://img.shields.io/badge/node-%3E%3D16.0.0-brightgreen)
-![TypeScript Version](https://img.shields.io/badge/typescript-%5E4.0.0-blue)
-![Package Manager](https://img.shields.io/badge/yarn-%E2%9C%93-2C8EBB)
+[![Node.js](https://img.shields.io/badge/Node.js-18.20.6%2B-green)](https://nodejs.org/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.7.3%2B-blue)](https://www.typescriptlang.org/)
 
-A Node.js-based Bilibili live streaming recording system, supporting multi-language interfaces and quick subscription features, developed with TypeScript.
-[中文文档](README_zh.md)
+[🔄 Switch to Chinese](README_zh.md)
 
 ## 🌟 Core Features
 
@@ -13,89 +11,23 @@ A Node.js-based Bilibili live streaming recording system, supporting multi-langu
 - Notification interaction via OneBot protocol
 - Multi-language internationalization support (i18n)
 - FFmpeg integrated video processing
-- Configurable quick subscription templates
-- Real-time logging system
 
-## 📦 Installation and Usage
+## 🛠️ Environment
 
-### Environment Requirements
+- Node.js 18.20.6+
+- TypeScript 5.7.3+
+- FFmpeg (Make sure the FFmpeg bin path is correctly configured in `config.json`)
+- [OneBot](https://onebot.dev/) compatible QQ bot
 
-- Node.js v16+
-- FFmpeg (needs to be pre-configured in environment variables or specified in the configuration)
+## 📦 Package Manager
 
-## 📥 Installation and Running
+- Yarn or Npm
 
-### Clone Repository
+## 📝 Available Commands
 
-```bash
-# Clone repository
-git clone https://github.com/CNXiaozhiy/BiliBili-Live-Recorder.git
-```
-
-### Using Yarn
-
-```bash
-# Install dependencies
-yarn install
-
-# Run in development mode
-yarn dev
-
-# Build and start production environment
-yarn serve
-
-# Compile project only
-yarn build
-```
-
-### Using NPM
-
-```bash
-# Install dependencies
-npm install
-
-# Run in development mode
-npm run dev
-
-# Build and start production environment
-npm run serve
-
-# Compile project only
-npm run build
-```
-
-## ⚙️ Configuration File Guide
-
-Create `config.ts` (based on template file `config_.ts`):
-
-1. **Bot Configuration**
-
-   - `QBOT_WS_URL`: Fill in the WebSocket address of the OneBot compatible framework
-   - Example: `ws://127.0.0.1:6700`
-
-2. **Bilibili Authentication**
-
-   - `Bili_Cookie`: Obtain via browser developer tools (see FAQ for tutorial)
-   - Format: `SESSDATA=xxxxx; bili_jct=xxxxx...`
-
-3. **Storage Path Configuration**
-
-   - `RECORD_FOLDER_PATH`: Recording file storage directory (requires write permissions)
-   - `FFMPEG_BIN_FOLDER`: FFmpeg binary directory
-
-4. **Subscription Template**
-
-```javascript
-quickSubscribe: {
-    rooms: {
-        // Key is QQ group number
-        123456: {
-            dec: 'Virtual Streamer Live Room',  // Custom display name
-            id: 22625027          // Actual live room ID
-        }
-    }
-}
-```
+- `dev` - Run in development mode.
+- `build` - Bundle the application using webpack.
+- `package` - Package the application into an executable file.
 
 ## 📂 Project Structure
 
@@ -107,42 +39,88 @@ quickSubscribe: {
 │   ├── i18n/        # Internationalization module
 │   ├── lib/         # Core libraries
 │   ├── logger/      # Log management
-│   ├── tools/       # Toolset
+│   ├── tools/       # Utilities
 │   ├── types/       # TypeScript type definitions
-│   ├── app.ts       # Main program entry
-│   └── config.ts    # Configuration file (needs to be manually created)
+│   ├── app.ts       # Main application entry point
 ```
 
-## 🌍 Multi-language Support
+## ⚙️ Configuration File
 
-Generate language template file:
+The configuration file `config.json` is located at the root of the project (same level as `package.json`):
+
+**Template:**
+
+```json
+{
+  "Bili_Cookie": "",
+  "RECORD_FOLDER_PATH": "/path/to/records/",
+  "FFMPEG_BIN_FOLDER": "/path/to/ffmpeg/bin",
+  "Language": "en_us",
+  "bot": {
+    "ws_url": "ws://127.0.0.1:3000",
+    "admin": [
+      {
+        "qid": 1811302029,
+        "permission": 1
+      }
+    ]
+  }
+}
+```
+
+**Explanation:**
+
+- `Bili_Cookie`: Your Bilibili Cookie (login to get it).
+- `RECORD_FOLDER_PATH`: Folder where video recordings will be saved.
+- `FFMPEG_BIN_FOLDER`: Path to FFmpeg's `bin` directory.
+- `Language`: Preferred language (e.g., `en_us` for English).
+- `bot`: Configuration for a QQ bot based on the OneBot protocol.
+  - `ws_url`: WebSocket address for the bot.
+  - `admin`: List of administrator QQ numbers and permission levels (max 100).
+
+## 🚀 Clone the Repository
+
+Clone the repository with this command:
 
 ```bash
-node generate-lng-json.js
+git clone https://github.com/CNXiaozhiy/BiliBili-Live-Recorder.git
 ```
 
-1. Create a new language file in the `languages` directory (e.g., `en_us.json`)
-2. Modify the `Language` field in the configuration to switch the display language
+## 💻 Install Dependencies
 
-## 🔍 Frequently Asked Questions
+You can use either `npm` or `yarn` to install dependencies:
 
-Q: How to get Bilibili Cookie?  
-A: After logging in, use browser developer tools → Network requests → Copy Cookie value
+Using npm:
 
-Q: FFmpeg path configuration error?  
-A: Ensure the path contains ffmpeg.exe and the slash direction is correct (Windows needs to escape forward slashes)
+```bash
+npm install
+```
 
-Q: Recording file save failed?  
-A: Check target folder permissions and disk space
+Using Yarn:
+
+```bash
+yarn install
+```
+
+## ❓ FAQ
+
+**Q: How to get my Bilibili Cookie?**  
+A: After logging in, open your browser's Developer Tools → Network → Copy the Cookie value.
+
+**Q: FFmpeg path is incorrect?**  
+A: Double-check the path and ensure it points to FFmpeg's `bin` directory.
+
+**Q: Recording files are not saving?**  
+A: Make sure the target folder has the correct permissions and enough disk space.
 
 ## 🤝 Contributing
 
-Welcome to submit PRs or Issues, please read before contributing:
+We welcome contributions! Before submitting a PR or Issue, please make sure to:
 
-1. Follow existing code style
-2. Update corresponding documentation
-3. Add necessary unit tests
+1. Follow the existing code style 🖋️.
+2. Update the relevant documentation 📚.
+3. Add necessary unit tests 🧪.
 
 ## 📄 License
 
-MIT License © 2024 BLR System Contributors
+MIT License © 2025 BLR System Contributors

@@ -60,7 +60,56 @@ export function colorize(...options: any): string {
     throw new Error('Invalid arguments');
 }
 
-// TypeScript Cannot do it
+type TextPattern = string;
+type RegexPattern = RegExp;
+type MatchResult = { [key: string]: string } | string[];
+
+type Callback = (result: MatchResult) => void;
+
+export function matchCommand(input: string, patterns: TextPattern[], callback: Callback): void;
+export function matchCommand(input: string, patterns: RegexPattern[], callback: Callback): void;
+export function matchCommand(input: string, patterns: TextPattern[] | RegexPattern[], callback: Callback): void {
+    if (patterns.length === 0) return;
+
+    if (typeof patterns[0] === 'string') {
+        // 处理文本格式匹配
+        const textPatterns = patterns as TextPattern[];
+        for (const pattern of textPatterns) {
+            const regexPattern = convertTextPatternToRegex(pattern);
+            const match = input.match(regexPattern);
+            if (match) {
+                const result = extractMatchResult(pattern, match);
+                if (callback instanceof Function) callback(result);
+                return;
+            }
+        }
+    } else {
+        // 处理正则表达式匹配
+        const regexPatterns = patterns as RegexPattern[];
+        for (const pattern of regexPatterns) {
+            const match = input.match(pattern);
+            if (match) {
+                if (callback instanceof Function) callback(match.slice(1)); // 去掉第一个元素（整个匹配的字符串）
+                return;
+            }
+        }
+    }
+}
+
+function convertTextPatternToRegex(pattern: TextPattern): RegExp {
+    const regexPattern = pattern.replace(/\{\{(\w+)\}\}/g, '(\\S+)');
+    // if (regexPattern.length === 0) return new RegExp(`^${pattern}$`);
+    return new RegExp(`^${regexPattern}$`);
+}
+
+function extractMatchResult(pattern: TextPattern, match: RegExpMatchArray): { [key: string]: string } {
+    const result: { [key: string]: string } = {};
+    const variableNames = [...pattern.matchAll(/\{\{(\w+)\}\}/g)].map(m => m[1]);
+    variableNames.forEach((name, index) => {
+        result[name] = match[index + 1];
+    });
+    return result;
+}
 
 // Object.keys(colors).forEach((color) => {
 //     const color_code = colorMap.get(color);

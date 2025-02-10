@@ -1,8 +1,8 @@
-import { BiliLiveRoomInfo, BiliLiveRoomPlayInfo } from "index";
+import { BiliLiveRoomInfo, BiliLiveRoomPlayInfo, BiliUserInfo } from "index";
 import request from 'request';
 import logger from "../logger";
 import { $t } from "../i18n";
-import { makeRequest } from "./http";
+import { makeRequest, makeRequestRetry } from "./http";
 
 const quality_description = {
     1: '原画',
@@ -49,7 +49,7 @@ async function getLiveStreamUrl(roomId: string | number): Promise<string> {
 
     for (let i = 1; i <= 10; i++) {
         // 获取直播流地址
-        const playUrlResponse = await makeRequest<{ code: number, data: BiliLiveRoomPlayInfo, message: string }>({ url: playUrl });
+        const playUrlResponse = await makeRequestRetry<{ code: number, data: BiliLiveRoomPlayInfo, message: string }>({ url: playUrl });
 
         if (playUrlResponse.data.code !== 0) {
             throw new Error(playUrlResponse.data.message);
@@ -68,7 +68,7 @@ async function getLiveStreamUrl(roomId: string | number): Promise<string> {
     }
 
     if (!streamUrl) {
-        const playUrlResponse = await makeRequest<{ code: number, data: BiliLiveRoomPlayInfo, message: string }>({ url: playUrl });
+        const playUrlResponse = await makeRequestRetry<{ code: number, data: BiliLiveRoomPlayInfo, message: string }>({ url: playUrl });
 
         for (let item of playUrlResponse.data.data.durl) {
             if (await testStreamUrl(item.url) === 200) {
@@ -77,6 +77,8 @@ async function getLiveStreamUrl(roomId: string | number): Promise<string> {
                 break;
             }
         }
+
+        logger.error(playUrlResponse.data);
         if (!streamUrl) throw new Error('获取可用直播流地址失败');
     }
 
@@ -86,11 +88,23 @@ async function getLiveStreamUrl(roomId: string | number): Promise<string> {
 
 async function getLiveRoomInfo (roomId: string | number): Promise<BiliLiveRoomInfo> {
     const roomInfoUrl = `https://api.live.bilibili.com/room/v1/Room/get_info?room_id=${roomId}`;
-    const roomInfoResponse = await makeRequest<{ code: number, data: BiliLiveRoomInfo, message: string }>({ url: roomInfoUrl, timeout: 120000 });
+    const roomInfoResponse = await makeRequestRetry<{ code: number, data: BiliLiveRoomInfo, message: string }>({ url: roomInfoUrl, timeout: 120000 });
     if (roomInfoResponse.data.code !== 0) {
-        throw new Error(roomInfoResponse.data.message);
+        throw roomInfoResponse.data;
+    } else {
+        return roomInfoResponse.data.data;
     }
-    return roomInfoResponse.data.data;
 }
 
-export { getLiveStreamUrl, getLiveRoomInfo };
+async function getUserInfo(mid: string | number): Promise<BiliUserInfo> {
+    // const userInfoUrl = `https://api.bilibili.com/x/space/acc/info?mid=${mid}`;
+    const userInfoUrl = `https://api.bilibili.com/x/web-interface/card?mid=${mid}`;
+    const userInfoResponse = await makeRequestRetry<{ code: number, data: BiliUserInfo, message: string }>({ url: userInfoUrl, headers: {} });
+    if (userInfoResponse.data.code !== 0) {
+        throw userInfoResponse.data;
+    } else {
+        return userInfoResponse.data.data;
+    }
+}
+
+export { getLiveStreamUrl, getLiveRoomInfo, getUserInfo };

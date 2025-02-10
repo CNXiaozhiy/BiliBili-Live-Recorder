@@ -3,14 +3,14 @@ import { $t } from '../i18n';
 
 const statusMap = {
     liveStatus: {
-        0: 'TEXT_CODE_105e14c8',
-        1: 'TEXT_CODE_04657494',
-        2: 'TEXT_CODE_0fef9c64'
+        0: 'TEXT_CODE_status.live_0',
+        1: 'TEXT_CODE_status.live_1',
+        2: 'TEXT_CODE_status.live_2'
     },
     recStatus: {
-        0: 'TEXT_CODE_c357be15',
-        1: 'TEXT_CODE_836534f1',
-        2: 'TEXT_CODE_41f477dc'
+        0: 'TEXT_CODE_status.rec_0',
+        1: 'TEXT_CODE_status.rec_1',
+        2: 'TEXT_CODE_status.rec_2'
     }
 }
 

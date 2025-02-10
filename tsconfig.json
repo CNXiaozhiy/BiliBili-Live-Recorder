@@ -27,7 +27,6 @@
 
     "paths": {
       "@languages/*": ["languages/*"],
-      "@ffmpeg/*": ["../ffmpeg/*"],
       "*": ["node_modules/*", "src/types/*"]
     },
 

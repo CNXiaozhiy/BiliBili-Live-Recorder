@@ -1,4 +1,4 @@
-import axios, { AxiosError, AxiosInstance, AxiosRequestConfig, AxiosResponse, InternalAxiosRequestConfig } from 'axios';
+import axios, { AxiosError, AxiosInstance, AxiosRequestConfig, AxiosResponse } from 'axios';
 import axiosRetry, { isNetworkError, isRetryableError } from 'axios-retry';
 import logger from '../logger';
 
@@ -15,12 +15,12 @@ axiosRetry(instance, {
   },
 });
 
-instance.interceptors.request.use((config: InternalAxiosRequestConfig) => {
+instance.interceptors.request.use((config: AxiosRequestConfig) => {
   // 设置默认的 User-Agent
   config.headers = config.headers || {}; // 确保 headers 存在
   config.headers['User-Agent'] = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36';
-  config.headers['Referer'] = 'https://www.bilibili.com';
-  config.headers['Origin'] = 'https://www.bilibili.com';
+  // config.headers['Referer'] = 'https://www.bilibili.com';
+  // config.headers['Origin'] = 'https://www.bilibili.com';
   return config;
 });
 
@@ -36,4 +36,17 @@ export async function makeRequest<T>(config: AxiosRequestConfig): Promise<AxiosR
     }
     throw error;
   }
+}
+
+export async function makeRequestRetry<T>(config: AxiosRequestConfig, retryCount: number = 3): Promise<AxiosResponse<T>> {
+  let err;
+  for (let i = 1; i <= retryCount; i++) {
+    try {
+      return await makeRequest(config);
+    } catch (error) {
+      logger.warn('Axios Request error, retry count:', i, error);
+      err = error;
+    }
+  }
+  throw err;
 }
