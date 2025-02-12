@@ -972,6 +972,10 @@ const app = async () => {
                     })
                 })
 
+                aRecorder.recorder.on('rec-warn', (err) => {
+                    logger.warn(err);
+                })
+
                 aRecorder.recorder.on('rec-convert-start', () => {
                     logger.info($t('TEXT_CODE_11aaea4d'), room_id);
 

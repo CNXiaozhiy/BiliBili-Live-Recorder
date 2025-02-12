@@ -1,7 +1,7 @@
 import { colorize, colors } from "../tools";
 import moment from "moment";
 
-const levels = ['TRACE', 'DEBUG', 'INFO', 'NOTICE', 'WARNING', 'ERROR', 'CRITICAL', 'ALERT', 'EMERGENCY'] as const;
+const levels = ['TRACE', 'DEBUG', 'INFO', 'NOTICE', 'WARN', 'ERROR', 'CRITICAL', 'ALERT', 'EMERGENCY'] as const;
 const levelColors: colors[] = ['grey', 'blue', 'green', 'cyan' ,'yellow', 'red', 'magenta', 'brightRed', 'whiteRed'];
 type LogLevel = typeof levels[number];
 
@@ -29,7 +29,7 @@ export default class XzLogger {
     debug(...msgs: any[]) { this.log(msgs, 'DEBUG') }
     info(...msgs: any[]) { this.log(msgs, 'INFO'); }
     notice(...msgs: any[]) { this.log(msgs, 'NOTICE') }
-    warn(...msgs: any[]) { this.log(msgs, 'WARNING') }
+    warn(...msgs: any[]) { this.log(msgs, 'WARN') }
     error(...msgs: any[]) { this.log(msgs, 'ERROR') }
     critical(...msgs: any[]) { this.log(msgs, 'CRITICAL') }
     alert(...msgs: any[]) { this.log(msgs, 'ALERT') }

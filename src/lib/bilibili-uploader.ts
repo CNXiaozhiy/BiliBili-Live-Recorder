@@ -141,7 +141,7 @@ export default class BiliUploader {
             })
     
             updateProgress(`视频分片上传 ${i + 1}/${totalChunks}`, i === totalChunks - 1 ? 'success' : 'pending', true);
-            logger.info($t('TEXT_CODE_704248b8', { replace: { index: i + 1, total: totalChunks } }), resp.data);
+            logger.info($t('TEXT_CODE_704248b8', { replace: { index: i + 1, total: totalChunks } }));
         }
     
         // 合片

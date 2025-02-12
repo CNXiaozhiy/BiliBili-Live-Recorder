@@ -50,6 +50,7 @@
     "TEXT_CODE_f65433c5":"[Live Recorder]\t获取原画直播流成功✔️ 共尝试 {{times}} 次",
     "TEXT_CODE_cf9d449d":"[Live Recorder]\t已使用 {{quality}} 清晰度♻️",
     "TEXT_CODE_4f013ca3":"[Live Recorder]\t获取直播流地址成功✔️",
+    "TEXT_CODE_a001d265":"[Proxy]\tBiliBili-Live Proxy Server 启动成功✔️ 端口 -> {{port}}",
     
     "TIPS_LOG_ERROR":"错误日志区域",
     "TEXT_CODE_0aef44bd":"[Live Recorder]\t取消订阅出错❌",
@@ -64,7 +65,10 @@
     "TEXT_CODE_704248b8":"[Live Recorder]\tUploader -> 分片 {{index}} 上传完成✔️",
 
     "TIPS_LOG_WARN":"警告日志区域",
-    "TEXT_CODE_3199beaa":"由于当前无任何订阅数据，且未安装任何适配器，程序可能在极短时间内结束运行。",
+    "TEXT_CODE_3199beaa":"[BLR System]\t由于当前无任何订阅数据，且未安装任何适配器，程序可能在极短时间内结束运行。",
+    "TEXT_CODE_1b8c5033":"[Live Recorder]\t{{id}} 直播流异常结束，正在尝试重连⚙️",
+    "TEXT_CODE_725dafa4":"xxx",
+    "TEXT_CODE_e621cf68":"xxx",
     
     "TIPS_NORMAL":"正常常量区",
 
@@ -116,11 +120,7 @@
     "TEXT_CODE_0552154f":"添加成功！",
     "TEXT_CODE_662f897e":"操作对象不是管理员",
     "TEXT_CODE_c4c7946e":"删除成功！",
-    "TEXT_CODE_a001d265":"xxx",
     "TEXT_CODE_91ddb87f":"xxx",
-    "TEXT_CODE_1b8c5033":"xxx",
-    "TEXT_CODE_725dafa4":"xxx",
-    "TEXT_CODE_e621cf68":"xxx",
     "TEXT_CODE_ef3224ea":"xxx",
     "TEXT_CODE_5cf9207c":"xxx",
     "TEXT_CODE_977453fc":"xxx",

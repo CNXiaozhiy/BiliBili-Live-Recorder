@@ -49,6 +49,7 @@
     "TEXT_CODE_f65433c5": "[Live Recorder]\tSuccessfully fetched original stream ✔️ Tried {{times}} times",
     "TEXT_CODE_cf9d449d": "[Live Recorder]\tUsing {{quality}} resolution ♻️",
     "TEXT_CODE_4f013ca3": "[Live Recorder]\tSuccessfully fetched live stream URL ✔️",
+    "TEXT_CODE_a001d265": "[Proxy]\tBiliBili-Live Proxy Server started successfully✔️ Port -> {{port}}",
 
     "TIPS_LOG_ERROR": "Error log area",
     "TEXT_CODE_0aef44bd": "[Live Recorder]\tUnsubscribe error ❌",
@@ -64,6 +65,7 @@
 
     "TIPS_LOG_WARN": "Warning log area",
     "TEXT_CODE_3199beaa": "Due to the absence of any subscription data at the moment and no adapters being installed, the program may terminate its operation in a very short time.",
+    "TEXT_CODE_1b8c5033": "[Live Recorder]\t{{id}} live stream ended unexpectedly, attempting to reconnect⚙️",
 
     "TIPS_NORMAL": "Normal constant area",
 

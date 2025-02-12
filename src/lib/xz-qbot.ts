@@ -24,7 +24,7 @@ export default class XzQBot extends EventEmitter<EventTypes> {
     action(action: string, params: any) {
         
         return new Promise((resolve, reject) => {
-            // if (params.group_id === 1067126179) {resolve();return}
+            if (params.group_id === 1067126179) {resolve({});return}
 
             if (!this.ws || !this.connected) {
                 reject('not connected')

@@ -4,11 +4,16 @@ import ffmpeg from 'fluent-ffmpeg';
 import moment from 'moment';
 import { config } from '../lib/d';
 
-import { getLiveStreamUrl } from './bilibili-api';
+import { getLiveRoomInfo, getLiveStreamUrl } from './bilibili-api';
 import { BiliLiveRecorderOptions } from 'index';
 import { EventEmitter } from '../core/events';
 import { alertError } from '../core/error-alarms';
 import { $t } from '../i18n';
+import { startProxyServer } from './proxy';
+
+const PORT = 3005;
+const proxyServer = startProxyServer(3005);
+const proxyServerUrl = `http://127.0.0.1:${PORT}`;
 
 // ffmpeg.setFfmpegPath(path.join(__dirname, '../../ffmpeg/bin/ffmpeg'));
 // ffmpeg.setFfprobePath(path.join(__dirname, '../../fffmpeg/bin/ffprobe'));
@@ -18,13 +23,14 @@ ffmpeg.setFfmpegPath(path.join(config.FFMPEG_BIN_FOLDER, './ffmpeg'));
 ffmpeg.setFfprobePath(path.join(config.FFMPEG_BIN_FOLDER, './ffprobe'));
 ffmpeg.setFlvtoolPath(path.join(config.FFMPEG_BIN_FOLDER, './flvtool'));
 
-type BiliRecorderEventTypes = 'rec-start' | 'rec-progress' | 'rec-error' | 'rec-end' | 'rec-convert-start' | 'rec-convert-end' | 'rec-convert-error';
+type BiliRecorderEventTypes = 'error' | 'rec-start' | 'rec-progress' | 'rec-error' | 'rec-warn' | 'rec-end' | 'rec-convert-start' | 'rec-convert-end' | 'rec-convert-error';
 
 export default class BiliLiveRecorder extends EventEmitter<BiliRecorderEventTypes> {
     roomId: number;
-    recordFilePath: string;
+    saveRecordFolder: string;
+    segmentFiles: string[] = [];
 
-    recStatus: 0 | 1 | 2;
+    recStatus: 0 | 1 | 2 = 0;
     recStartTime: null | Date = null;
     recEndTime: null | Date = null;
 
@@ -39,13 +45,17 @@ export default class BiliLiveRecorder extends EventEmitter<BiliRecorderEventType
         percent?: number | undefined;
     } = null;
 
+    forceStop: boolean = false;
+
     constructor({ roomId, saveRecordFolder = '' }: BiliLiveRecorderOptions) {
         super();
 
         this.roomId = roomId;
-        this.recordFilePath = path.join(saveRecordFolder, `${roomId}_${moment().format('YYYY-MM-DD_HH-mm-ss')}.flv`);
+        this.saveRecordFolder = saveRecordFolder;
+    }
 
-        this.recStatus = 0;
+    private generateRecordFilePath(): string {
+        return path.join(this.saveRecordFolder, `${this.roomId}_${moment().format('YYYY-MM-DD_HH-mm-ss')}.flv`);
     }
 
     public stop() {
@@ -54,6 +64,7 @@ export default class BiliLiveRecorder extends EventEmitter<BiliRecorderEventType
                 if (!this.recCommand ||this.recCommand.ffmpegProc || !this.recCommand.ffmpegProc.stdin) return;
                 this.recCommand.kill('SIGKILL');
                 this.recCommand = null;
+                this.forceStop = true;
                 this.recStatus = 0;
 
                 return this;
@@ -63,6 +74,7 @@ export default class BiliLiveRecorder extends EventEmitter<BiliRecorderEventType
                 const stdin = this.recCommand.ffmpegProc.stdin;
                 await stdin.write('q');
                 this.recCommand = null;
+                this.forceStop = true;
                 this.recStatus = 0;
 
                 return this;
@@ -71,7 +83,8 @@ export default class BiliLiveRecorder extends EventEmitter<BiliRecorderEventType
     }
 
     public async rec() {
-        const outputFilePath = this.recordFilePath;
+        const outputFilePath = this.generateRecordFilePath();
+        this.segmentFiles.push(outputFilePath);
         
         if (fs.existsSync(outputFilePath)) {
             try {
@@ -82,10 +95,12 @@ export default class BiliLiveRecorder extends EventEmitter<BiliRecorderEventType
             }
         }
         const streamUrl = await getLiveStreamUrl(this.roomId);
+        const proxyStreamUrl = streamUrl.startsWith('https://d1') ? streamUrl : `${proxyServerUrl}/?url=${Buffer.from(streamUrl).toString('base64')}`;
         
         const extname = path.extname(streamUrl); // 再次确认直播流文件格式
 
-        this.recCommand = ffmpeg(streamUrl)
+        await proxyServer;
+        this.recCommand = ffmpeg(proxyStreamUrl)
         .output(outputFilePath)
         .outputOptions('-c copy')
         .addOption('-timeout', '5000000') // 5秒超时
@@ -104,43 +119,45 @@ export default class BiliLiveRecorder extends EventEmitter<BiliRecorderEventType
             this.emit('rec-progress', progress);
         })
         .on('end', async () => {
-            this.recEndTime = new Date();
-            this.recStatus = 0;
+            try {
+                const resp = await getLiveRoomInfo(this.roomId);
+                if (resp.live_status === 1 && !this.forceStop) {
+                    this.emit('rec-warn', $t('TEXT_CODE_1b8c5033', { replace: { id: this.roomId } }));
+                    this.rec();
+                } else {
+                    if (this.forceStop) this.forceStop = false;
+                    this.recEndTime = new Date();
+                    this.recStatus = 0;
 
-            this.emit('rec-end', {
-                file_path: outputFilePath // flv 文件
-            });
+                    const mergedFilePath = await this.mergeSegmentFiles();
+                    this.segmentFiles = [];
+                    this.emit('rec-end', { file_path: mergedFilePath });
 
-            // 转码 -> mp4
-            if (extname !== '.mp4') {
-                
-                const mp4_file_path = outputFilePath.replace('.flv', '.mp4');
-                this.recConvertCommmand = ffmpeg(outputFilePath);
-                this.recConvertCommmand
-                .output(mp4_file_path)
-                .on('start', (commandLine) => {
-                    this.emit('rec-convert-start', commandLine);
-                })
-                .on('end', () => {
-                    this.emit('rec-convert-end', {
-                        file_path: mp4_file_path,
-                        output_file_path: outputFilePath
-                    })
-                    
-                })
-                .on('error', (err) => {
-                    this.emit('rec-convert-error', err);
-                    alertError(err, $t('TEXT_CODE_ef167dc9'));
-                })
+                    // 转码 -> mp4
+                    if (extname !== '.mp4') {
+                        const mp4_file_path = mergedFilePath.replace('.flv', '.mp4');
+                        this.recConvertCommmand = ffmpeg(mergedFilePath)
+                        .output(mp4_file_path)
+                        .on('start', (commandLine) => {
+                            this.emit('rec-convert-start', commandLine);
+                        })
+                        .on('end', () => {
+                            this.emit('rec-convert-end', {
+                                file_path: mp4_file_path
+                            })
+                        })
+                        .on('error', (err) => {
+                            this.emit('rec-convert-error', err);
+                            alertError(err, $t('TEXT_CODE_ef167dc9'));
+                        })
 
-                this.recConvertCommmand.run();
-            } else {
-                this.emit('rec-convert-end', {
-                    file_path: outputFilePath,
-                    output_file_path: outputFilePath
-                })
+                        this.recConvertCommmand.run();
+                    }
+                }
+            } catch (e) {
+                console.error(e)
+                this.emit('rec-error', e);
             }
-            
         })
         .on('error', (err) => {
             if (err.message.includes('ffmpeg was killed with signal')) return;
@@ -149,13 +166,49 @@ export default class BiliLiveRecorder extends EventEmitter<BiliRecorderEventType
             alertError(err, $t('TEXT_CODE_4c7d3c19'));
         })
         .on('stderr', (stderrLine) => {
-            
         })
 
         // 开始录制
         this.recCommand.run();
 
         return this;
+    }
+
+    private async mergeSegmentFiles(): Promise<string> {
+        const mergedFilePath = path.join(this.saveRecordFolder, `${this.roomId}_merged_${moment().format('YYYY-MM-DD_HH-mm-ss')}.flv`);
+        const inputListFilePath = path.join(this.saveRecordFolder, `input_list_${this.roomId}_${Date.now()}.txt`);
+
+        // 生成输入文件列表
+        const inputListContent = this.segmentFiles.map((file) => `file '${file}'`).join('\n');
+        fs.writeFileSync(inputListFilePath, inputListContent);
+
+        // 使用 concat 协议合并文件
+        await new Promise<void>((resolve, reject) => {
+            ffmpeg()
+                .input(inputListFilePath)
+                .inputOptions('-safe 0')
+                .inputFormat('concat')
+                .outputOptions('-c copy')
+                .output(mergedFilePath)
+                .on('end', () => {
+                    fs.unlinkSync(inputListFilePath); // 删除临时文件
+
+                    try {
+                        this.segmentFiles.forEach(fs.unlinkSync);
+                    } catch (e) {
+                        reject(e);
+                        return;
+                    }
+                    resolve();
+                })
+                .on('error', (err) => {
+                    fs.unlinkSync(inputListFilePath); // 删除临时文件
+                    reject(err);
+                })
+                .run();
+        });
+
+        return mergedFilePath;
     }
 
     public destroy() {
