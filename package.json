@@ -10,7 +10,8 @@
     "url": "https://github.com/CNXiaozhiy/BiliBili-Live-Recorder.git"
   },
   "scripts": {
-    "build": "webpack --mode production",
+    "build": "webpack --mode production && pkg . --out-path=build -t win",
+    "dist": "webpack --mode production",
     "package": "pkg . --out-path=build -t win",
     "dev": "ts-node src/app.ts"
   },
