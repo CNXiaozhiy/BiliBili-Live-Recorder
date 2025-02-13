@@ -14,8 +14,11 @@ axiosRetry(instance, {
     return retryCount * 1000;
   },
   retryCondition: (error: AxiosError) => {
-    // 仅在网络错误或 5xx 错误时重试
-    return isNetworkError(error) || isRetryableError(error);
+    return (
+      isNetworkError(error) ||
+      isRetryableError(error) ||
+      (error.response?.status === 429)
+    );
   },
 });
 

@@ -1,15 +1,15 @@
 /**
  * XzBLR System
- * @version 1.0.0
+ * @version 1.0.1
  */
 
-const version = "1.0.0";
+const version = "1.0.1";
 
-console.log('\x1B[31m' + `    ____     _     __    _     __     _                  ____                            __              
-   / __ )   (_)   / /   (_)   / /    (_) _   __  ___    / __ \\  ___   _____  ____   ____/ /  ___    _____
-  / __  |  / /   / /   / /   / /    / / | | / / / _ \\  / /_/ / / _ \\ / ___/ / __ \\ / __  /  / _ \\  / ___/
- / /_/ /  / /   / /   / /   / /___ / /  | |/ / /  __/ / _, _/ /  __// /__  / /_/ // /_/ /  /  __/ / /    
-/_____/  /_/   /_/   /_/   /_____//_/   |___/  \\___/ /_/ |_|  \\___/ \\___/  \\____/ \\__,_/   \\___/ /_/     
+console.log('\x1B[31m' + `    ____     _     __    _     __     _                  ____                                    __              
+   / __ )   (_)   / /   (_)   / /    (_) _   __  ___    / __ \\  ___   _____  ____    _____  ____/ /  ___    _____
+  / __  |  / /   / /   / /   / /    / / | | / / / _ \\  / /_/ / / _ \\ / ___/ / __ \\  / ___/ / __  /  / _ \\  / ___/
+ / /_/ /  / /   / /   / /   / /___ / /  | |/ / /  __/ / _, _/ /  __// /__  / /_/ / / /    / /_/ /  /  __/ / /    
+/_____/  /_/   /_/   /_/   /_____//_/   |___/  \\___/ /_/ |_|  \\___/ \\___/  \\____/ /_/     \\__,_/   \\___/ /_/     
 ` + '\x1B[0m');
 console.log('\x1B[4m' + `XzBLR Version: ${version}` + '\x1B[0m');
 console.log('\x1B[4m' + `Github: https://github.com/CNXiaozhiY/bilibili-live-recorder` + '\x1B[0m' + '\n');
@@ -26,6 +26,7 @@ import XzQBot from "./lib/xz-qbot";
 import { alertError, setNotifyAdapter } from "./core/error-alarms";
 import logger from "./logger";
 import { $t } from "./i18n";
+import path from 'path';
 
 const db = subscribe;
 
@@ -107,7 +108,7 @@ const tools = {
 
 const app = async () => {
 
-    const uploader = new BiliUploader(BiliCookie, 10 * 1024 * 1024);
+    const uploader = new BiliUploader(BiliCookie);
 
     if (qbot) {
         await qbot.waitConnect
@@ -770,7 +771,8 @@ const app = async () => {
                                         message.push({ type: 'text',
                                             data: {
                                                 text: $t('TEXT_CODE_16fc8c6f',{ replace: { 
-                                                    id: rows[i].room_id, 
+                                                    id: rows[i].room_id,
+                                                    index: recorder.segmentFiles.length,
                                                     recStatus: statusToString('recStatus', recorder.recStatus),
                                                     timemark: recorder.recProgress?.timemark || '未知',
                                                     fps: recorder.recProgress?.currentFps || '未知'

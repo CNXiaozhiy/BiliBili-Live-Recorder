@@ -3,7 +3,7 @@ import path from "path";
 import { BiliUploaderOptions } from "index";
 import logger from "../logger";
 import { $t } from "../i18n";
-import { makeRequest } from "./http";
+import { makeRequestRetry } from "./http";
 import moment from "moment";
 
 interface BiliUploaderTask {
@@ -66,7 +66,7 @@ export default class BiliUploader {
         // 预上传 - 注册视频存储空间
         updateProgress('注册视频存储空间', 'pending');
 
-        const res_1 = await makeRequest<{ OK: number, upos_uri: string, endpoint: string, auth: string, biz_id: string }>({
+        const res_1 = await makeRequestRetry<{ OK: number, upos_uri: string, endpoint: string, auth: string, biz_id: string }>({
             url: `https://member.bilibili.com/preupload?name=${video_file_name}&r=upos&profile=ugcupos%2Fbup&ssl=0&size=${video_file_size}&version=2.8.9`,
             headers: {
                 Cookie: this.cookie
@@ -89,7 +89,7 @@ export default class BiliUploader {
         // 获取上传ID
         updateProgress('获取上传ID', 'pending');
 
-        const res_2 = await makeRequest<{ OK: number, bucket: string, key: string, upload_id: string }>({
+        const res_2 = await makeRequestRetry<{ OK: number, bucket: string, key: string, upload_id: string }>({
             method: 'POST',
             url: upload_url + '?uploads&output=json',
             headers: {
@@ -129,25 +129,33 @@ export default class BiliUploader {
               total: `${video_file_size}`
             });
 
-            const resp = await makeRequest({
-                method: 'PUT',
-                url: `${upload_url}?${params.toString()}`,
-                headers: {
-                    'Content-Type': 'application/octet-stream',
-                    'X-Upos-Auth': auth,
-                    Cookie: this.cookie
-                },
-                data: chunk
-            })
+            try {
+                const resp = await makeRequestRetry({
+                    method: 'PUT',
+                    url: `${upload_url}?${params.toString()}`,
+                    headers: {
+                        'Content-Type': 'application/octet-stream',
+                        'Content-Length': `${chunkSize}`,
+                        'X-Upos-Auth': auth,
+                        Cookie: this.cookie
+                    },
+                    data: chunk
+                })
+
+                updateProgress(`视频分片上传 ${i + 1}/${totalChunks}`, i === totalChunks - 1 ? 'success' : 'pending', true);
+                logger.info($t('TEXT_CODE_704248b8', { replace: { index: i + 1, total: totalChunks } }), resp.data);
+            } catch (e) {
+                updateProgress(`视频分片上传 ${i + 1}/${totalChunks}`, 'error');
+                throw e;
+            }
     
-            updateProgress(`视频分片上传 ${i + 1}/${totalChunks}`, i === totalChunks - 1 ? 'success' : 'pending', true);
-            logger.info($t('TEXT_CODE_704248b8', { replace: { index: i + 1, total: totalChunks } }));
+            
         }
     
         // 合片
         updateProgress('视频合片（校验）', 'pending');
         
-        const res_3 = await makeRequest<{ OK: number, location: string, bucket: string, key: string }>({
+        const res_3 = await makeRequestRetry<{ OK: number, location: string, bucket: string, key: string }>({
             method: 'POST',
             url: `${upload_url}?output=json&name=${video_file_name}&profile=ugcupos%2Fbup&uploadId=${upload_id}&biz_id=${biz_id}`,
             headers: {
@@ -165,7 +173,7 @@ export default class BiliUploader {
         // 上传封面
         updateProgress('上传封面', 'pending');
 
-        const res_4 = await makeRequest<{ code: number, message: string, ttl: number, data: { url: string } }>({
+        const res_4 = await makeRequestRetry<{ code: number, message: string, ttl: number, data: { url: string } }>({
             method: 'POST',
             url: `https://member.bilibili.com/x/vu/web/cover/up`,
             headers: {
@@ -189,7 +197,7 @@ export default class BiliUploader {
         // 投稿视频
         updateProgress('正式投稿视频', 'pending');
 
-        const res_5 = await makeRequest<{ code: number,message: string, ttl: number, data: { aid: number, bvid: string } }>({
+        const res_5 = await makeRequestRetry<{ code: number,message: string, ttl: number, data: { aid: number, bvid: string } }>({
             method: 'POST',
             url: `https://member.bilibili.com/x/vu/web/add/v3?csrf=${csrf}`,
             headers: {

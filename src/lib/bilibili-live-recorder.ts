@@ -94,6 +94,24 @@ export default class BiliLiveRecorder extends EventEmitter<BiliRecorderEventType
                 return;
             }
         }
+
+        const delNullSegmentFiles = (file?: string) => {
+            if (!file) {
+                this.segmentFiles.forEach(delNullSegmentFiles, this);
+            } else {
+                if (!fs.existsSync(file)) {
+                    this.segmentFiles.includes(file) && this.segmentFiles.splice(this.segmentFiles.indexOf(file), 1);
+                } else if (fs.statSync(file).size === 0) {
+                    try {
+                        fs.unlinkSync(file);
+                        this.segmentFiles.includes(file) && this.segmentFiles.splice(this.segmentFiles.indexOf(file), 1);
+                    } catch (e) {
+                        this.emit('rec-error', e);
+                    }
+                }
+            }
+        }
+
         const streamUrl = await getLiveStreamUrl(this.roomId);
         const proxyStreamUrl = streamUrl.startsWith('https://d1') ? streamUrl : `${proxyServerUrl}/?url=${Buffer.from(streamUrl).toString('base64')}`;
         
@@ -122,12 +140,15 @@ export default class BiliLiveRecorder extends EventEmitter<BiliRecorderEventType
             try {
                 const resp = await getLiveRoomInfo(this.roomId);
                 if (resp.live_status === 1 && !this.forceStop) {
+                    delNullSegmentFiles(outputFilePath);
                     this.emit('rec-warn', $t('TEXT_CODE_1b8c5033', { replace: { id: this.roomId } }));
                     this.rec();
                 } else {
                     if (this.forceStop) this.forceStop = false;
                     this.recEndTime = new Date();
                     this.recStatus = 0;
+
+                    delNullSegmentFiles();
 
                     const mergedFilePath = await this.mergeSegmentFiles();
                     this.segmentFiles = [];
@@ -164,6 +185,10 @@ export default class BiliLiveRecorder extends EventEmitter<BiliRecorderEventType
             this.emit('rec-error', err);
 
             alertError(err, $t('TEXT_CODE_4c7d3c19'));
+
+            delNullSegmentFiles(outputFilePath);
+            
+            this.rec();
         })
         .on('stderr', (stderrLine) => {
         })

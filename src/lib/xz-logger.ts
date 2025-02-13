@@ -35,31 +35,18 @@ export default class XzLogger {
     alert(...msgs: any[]) { this.log(msgs, 'ALERT') }
     emergency(...msgs: any[]) { this.log(msgs, 'EMERGENCY') }
 
-    private log(msgs: any[], level: LogLevel = 'INFO') {
+    private log(msgs: any[], level: LogLevel) {
         const levelInfo = this.logLevelInfoMap.get(level);
         if (!levelInfo) return
 
         if (levelInfo.weight < this.level) return;
         const logColor: colors = levelInfo.color || 'blue';
-        let m = this.messageFormat(`[{data}] ${colorize(logColor, '[' + level + ']')}`);
+        let s = this.messageFormat(`[{data}] ${colorize(logColor, '[' + level + ']')}`);
         if (level === 'ERROR') {
-            console.error(m, ...msgs);
-            return;
+            console.error(s, ...msgs);
+        } else {
+            console.log(s, ...msgs);
         }
-        msgs.forEach((item) => {
-            m += ' ';
-    
-            if (typeof item === 'number') {
-                m += colorize('yellow', item.toString());
-            } else if (typeof item === 'object') {
-                m += colorize('green', JSON.stringify(item));
-            } else if (typeof item !== 'string') {
-                m += item.toString();
-            } else {
-                m += this.messageFormat(item)
-            }
-        })
-        console.log(m);
     }
 
     private messageFormat(m: string) {
