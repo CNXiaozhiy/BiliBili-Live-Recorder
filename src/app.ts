@@ -108,7 +108,7 @@ const tools = {
 
 const app = async () => {
 
-    const uploader = new BiliUploader(BiliCookie);
+    const uploader = new BiliUploader(BiliCookie, 10 * 1024 * 1024);
 
     if (qbot) {
         await qbot.waitConnect
@@ -484,6 +484,37 @@ const app = async () => {
                                     { type: 'reply', data: { id: message_id.toString() } },
                                     { type: 'text', data: { text: list ? listStr : $t('TEXT_CODE_c4ac6d3f') } }
                                 ]
+                            })
+                        }
+                    })
+                    matchCommand(command, [$t('TEXT_CODE_command.reupload')], async (result) => {
+                        if (!(await tools.isAdmin(qid)).isAdmin) {
+                            qbot?.action('send_group_msg', {
+                                group_id: gid,
+                                message: [
+                                    { type: 'reply', data: { id: message_id.toString() } },
+                                    { type: 'text', data: { text: $t('TEXT_CODE_84eda865') } }
+                                ]
+                            })
+                            return
+                        }
+
+                        if ('id' in result) {
+                            uploader.getTask(parseInt(result.id))?.upload()
+                            .then(resp => {
+                                const message = [{ type: 'text', data: { text: $t('TEXT_CODE_75fe8a3e', { replace: {
+                                    bvid: resp.bvid
+                                }}) } }]
+                                qbot?.action('send_group_msg', { gid, message })
+                            })
+                            .catch(e => {
+                                qbot?.action('send_group_msg', {
+                                    group_id: gid,
+                                    message: [
+                                        { type: 'reply', data: { id: message_id.toString() } },
+                                        { type: 'text', data: { text: e } }
+                                    ]
+                                })
                             })
                         }
                     })

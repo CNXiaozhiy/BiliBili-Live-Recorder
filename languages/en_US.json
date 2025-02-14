@@ -23,7 +23,7 @@
   "TEXT_CODE_command.add_admin_2": "Add admin {{id}} {{permission}}",
   "TEXT_CODE_command.add_quick_subscribe": "Add quick subscription {{id}}",
   "TEXT_CODE_command.remove_admin": "Remove admin {{id}}",
-  "TEXT_CODE_command.510be5ac": "xxx",
+  "TEXT_CODE_command.reupload": "Reupload {{id}}",
   "TEXT_CODE_command.20552e83": "xxx",
   "TEXT_CODE_command.7c4321f2": "xxx",
   "TEXT_CODE_command.c618fe4b": "xxx",
