@@ -1,6 +1,6 @@
 {
   "name": "bilibili-live-recorder",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "A Node.js-based Bilibili live streaming recording system, supporting multi-language interfaces and quick subscription features, developed with TypeScript.",
   "author": "Xz",
   "bin": "dist/app.js",

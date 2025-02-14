@@ -23,7 +23,7 @@
   "TEXT_CODE_command.add_admin_2": "添加管理员 {{id}} {{permission}}",
   "TEXT_CODE_command.add_quick_subscribe": "添加快捷订阅 {{id}}",
   "TEXT_CODE_command.remove_admin": "删除管理员 {{id}}",
-  "TEXT_CODE_command.510be5ac": "xxx",
+  "TEXT_CODE_command.reupload": "重新投稿 {{id}}",
   "TEXT_CODE_command.20552e83": "xxx",
   "TEXT_CODE_command.7c4321f2": "xxx",
   "TEXT_CODE_command.c618fe4b": "xxx",
