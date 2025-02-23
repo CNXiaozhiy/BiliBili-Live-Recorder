@@ -1,9 +1,9 @@
 import fs from "fs";
 import path from "path";
 import { BiliUploaderOptions } from "index";
-import logger from "../logger";
-import { $t } from "../i18n";
-import { makeRequest, makeRequestRetry } from "./http";
+import logger from "../../logger";
+import { $t } from "../../i18n";
+import { makeRequestRetry } from "../../lib/http";
 import moment from "moment";
 
 interface BiliUploaderTask {
@@ -67,9 +67,8 @@ export default class BiliUploader {
         updateProgress('注册视频存储空间', 'pending');
 
         const res_1 = await makeRequestRetry<{ OK: number, upos_uri: string, endpoint: string, auth: string, biz_id: string }>({
-            url: `https://member.bilibili.com/preupload?name=${video_file_name}&upcdn=bldsa&zone=cs&r=upos&profile=ugcfx%2Fbup&ssl=0&size=${video_file_size}&version=2.14.0.0`,
+            url: `https://member.bilibili.com/preupload?name=${video_file_name}&r=upos&profile=ugcupos%2Fbup&ssl=0&size=${video_file_size}&version=2.8.9`,
             headers: {
-                Referer: 'https://member.bilibili.com/platform/upload/video/frame',
                 Cookie: this.cookie
             }
         })
@@ -92,10 +91,8 @@ export default class BiliUploader {
 
         const res_2 = await makeRequestRetry<{ OK: number, bucket: string, key: string, upload_id: string }>({
             method: 'POST',
-            url: `${upload_url}?uploads&output=json&profile=ugcfx%2Fbup&filesize=${video_file_size}&partsize=${this.CHUNK_SIZE}&biz_id=${biz_id}`,
+            url: upload_url + '?uploads&output=json',
             headers: {
-                Origin: 'https://member.bilibili.com',
-                Referer: 'https://member.bilibili.com/',
                 'X-Upos-Auth': auth,
                 Cookie: this.cookie
             }
@@ -107,7 +104,7 @@ export default class BiliUploader {
         }
         updateProgress('获取上传ID', 'success', true);
 
-        let { data: { upload_id } } = res_2;
+        const { data: { upload_id } } = res_2;
     
         // 分片上传
 
@@ -122,7 +119,7 @@ export default class BiliUploader {
     
             // 构建参数
             const params = new URLSearchParams({
-              partNumber: `${i + 1}`,
+              partNumber: `1`,
               uploadId: upload_id,
               chunk: `${start}`,
               chunks: `${totalChunks}`,
@@ -132,28 +129,23 @@ export default class BiliUploader {
               total: `${video_file_size}`
             });
 
-            console.log(`${upload_url}?${params.toString()}`, auth)
-
             try {
                 const resp = await makeRequestRetry({
                     method: 'PUT',
                     url: `${upload_url}?${params.toString()}`,
                     headers: {
-                        Origin: 'https://member.bilibili.com',
-                        Referer: 'https://member.bilibili.com/',
                         'Content-Type': 'application/octet-stream',
-                        'Content-Length': chunkSize,
-                        'X-Upos-Auth': auth
+                        'Content-Length': `${chunkSize}`,
+                        'X-Upos-Auth': auth,
+                        Cookie: this.cookie
                     },
-                    data: chunk,
-                    maxBodyLength: Infinity
+                    data: chunk
                 })
 
                 updateProgress(`视频分片上传 ${i + 1}/${totalChunks}`, i === totalChunks - 1 ? 'success' : 'pending', true);
                 logger.info($t('TEXT_CODE_704248b8', { replace: { index: i + 1, total: totalChunks } }), resp.data);
             } catch (e) {
                 updateProgress(`视频分片上传 ${i + 1}/${totalChunks}`, 'error');
-                console.error(e)
                 throw e;
             }
     
@@ -165,10 +157,8 @@ export default class BiliUploader {
         
         const res_3 = await makeRequestRetry<{ OK: number, location: string, bucket: string, key: string }>({
             method: 'POST',
-            url: `${upload_url}?output=json&name=${video_file_name}&profile=ugcfx%2Fbup&uploadId=${upload_id}&biz_id=${biz_id}`,
+            url: `${upload_url}?output=json&name=${video_file_name}&profile=ugcupos%2Fbup&uploadId=${upload_id}&biz_id=${biz_id}`,
             headers: {
-                Origin: 'https://member.bilibili.com',
-                Referer: 'https://member.bilibili.com/',
                 'X-Upos-Auth': auth,
                 Cookie: this.cookie
             }
@@ -187,8 +177,6 @@ export default class BiliUploader {
             method: 'POST',
             url: `https://member.bilibili.com/x/vu/web/cover/up`,
             headers: {
-                Origin: 'https://member.bilibili.com',
-                Referer: 'https://member.bilibili.com/',
                 'Content-Type': 'multipart/form-data',
                 Cookie: this.cookie
             },
@@ -213,8 +201,6 @@ export default class BiliUploader {
             method: 'POST',
             url: `https://member.bilibili.com/x/vu/web/add/v3?csrf=${csrf}`,
             headers: {
-                Origin: 'https://member.bilibili.com',
-                Referer: 'https://member.bilibili.com/',
                 'Content-Type': 'application/json',
                 Cookie: this.cookie
             },

@@ -1,8 +1,8 @@
 import { BiliLiveAutoRecorderOptions } from "index";
-import BiliLiveMonitor from "./bilibili-live-monitor";
-import BiliLiveRecorder from "./bilibili-live-recorder";
-import { alertError } from "../core/error-alarms";
-import { $t } from "../i18n";
+import BiliLiveMonitor from "./live-monitor";
+import BiliLiveRecorder from "./live-recorder";
+import { alertError } from "../../core/error-alarms";
+import { $t } from "../../i18n";
 
 export default class BiliLiveAutoRecorder {
     public monitor: BiliLiveMonitor;

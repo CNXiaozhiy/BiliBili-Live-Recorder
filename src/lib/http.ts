@@ -23,10 +23,10 @@ axiosRetry(instance, {
 });
 
 instance.interceptors.request.use(async (config: AxiosRequestConfig) => {
-  await new Promise<void>(resolve => throttle(resolve)); 
-
-  // 设置默认的 User-Agent
   config.headers = config.headers || {}; // 确保 headers 存在
+
+  !config.headers['No-Throttleo'] && await new Promise<void>(resolve => throttle(resolve)); 
+
   config.headers['User-Agent'] = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36';
   config.headers['Referer'] = config.headers['Referer'] || 'https://www.bilibili.com';
   config.headers['Origin'] = config.headers['Origin'] || 'https://www.bilibili.com';

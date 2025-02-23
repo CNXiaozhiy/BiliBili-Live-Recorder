@@ -6,15 +6,26 @@ declare module 'fluent-ffmpeg' {
     }
 }
 
+declare global {
+  interface Date {
+      toGMTString(): string;
+  }
+}
+
 type BiliLiveAutoRecorderOptions =  BiliLiveMonitorOptions & BiliLiveRecorderOptions & { autoRecord: boolean };
 
 export interface BiliLiveRecorderOptions {
     roomId: number;
     saveRecordFolder: string;
+    transcodeMP4?: boolean;
 }
 
 export interface BiliLiveMonitorOptions {
     roomId: number;
+}
+
+export interface BiliVideoMonitorOptions {
+  bvid: string;
 }
 
 export interface BiliUploaderOptions {
@@ -29,7 +40,7 @@ export interface BiliUploaderOptions {
     }
 }
 
-export interface IBiliLiveMonitor {
+export interface IBiliMonitor {
     startMonitor(roomId: number): void;
     stopMonitor(): void;
 }
@@ -75,6 +86,51 @@ export interface BiliLiveRoomInfo {
         status: number;
         master_list: any[];
     };
+}
+export interface BiliVideoInfo {
+  bvid: string,
+  aid: string,
+  videos: number,
+  tid: number,
+  tname: string,
+  copyright: 1 | 2,
+  pic: string,
+  title: string,
+  pubdate: number,
+  ctime: number,
+  desc: string,
+  desc_v2: any[],
+  state: number,
+  duration: number,
+  forward: number,
+  mission_id: number,
+  redirect_url: string,
+  rights: any,
+  owner: BiliUserInfo,
+  stat: any,
+  dynamic: string,
+  cid: number,
+  dimension: any,
+  premiere: null,
+  teenage_mode: number,
+  is_chargeable_season: boolean,
+  is_story: boolean,
+  is_upower_exclusive: boolean,
+  is_upower_pay: boolean,
+  is_upower_show: boolean,
+  no_cache: boolean,
+  pages: any[],
+  subtitle: any,
+  staff: any[],
+  is_season_display: boolean,
+  user_garb: any,
+  honor_reply: any,
+  like_icon: string,
+  need_jump_bv: boolean,
+  disable_show_up_info: boolean,
+  is_story_play: boolean,
+  is_view_self: boolean,
+  argue_info: any
 }
 
 export interface BiliUserInfo {

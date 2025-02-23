@@ -120,3 +120,9 @@ function extractMatchResult(pattern: TextPattern, match: RegExpMatchArray): { [k
 //         enumerable: false
 //     });
 // });
+
+export function getCSRF(cookie: string) {
+    const match = cookie.match(/bili_jct=([^\s;]+)/);
+    if (!match || !Array.isArray(match)) throw new Error('cookie中未找到bili_jct');
+    return match[1];
+}

@@ -1,9 +1,9 @@
 /**
  * XzBLR System
- * @version 1.0.1
+ * @version 1.0.3
  */
 
-const version = "1.0.1";
+const version = "1.0.3";
 
 console.log('\x1B[31m' + `    ____     _     __    _     __     _                  ____                                    __              
    / __ )   (_)   / /   (_)   / /    (_) _   __  ___    / __ \\  ___   _____  ____    _____  ____/ /  ___    _____
@@ -17,16 +17,21 @@ console.log('\x1B[4m' + `Github: https://github.com/CNXiaozhiY/bilibili-live-rec
 import { colorize, getImageBase64FromUrl, matchCommand } from './tools';
 import { statusToString } from './tools/format';
 import moment from "moment";
-import { subscribe, config } from './lib/d';
+import { subscribe, config, store, chat } from './lib/d';
 import { DBSubscribeTableRows, DBQuickSubscribeTableRows, DBBotAdminTableRows } from "index";
-import BiliLiveAutoRecorder from "./lib/bilibili-live-auto-recorder";
-import BiliUploader from "./lib/bilibili-uploader";
-import { getLiveRoomInfo, getUserInfo } from "./lib/bilibili-api";
+import BiliLiveAutoRecorder from "./modules/bilibili/live-auto-recorder";
+import BiliUploader from "./modules/bilibili/uploader";
+import BiliVideoMonitor from "./modules/bilibili/video-monitor";
+import FileCleaner from "./modules/system/live-recoder-file-cleaner";
+import { checkARefreshCookie, getLiveRoomInfo, getUserInfo, login } from "./modules/bilibili/api";
 import XzQBot from "./lib/xz-qbot";
 import { alertError, setNotifyAdapter } from "./core/error-alarms";
 import logger from "./logger";
 import { $t } from "./i18n";
 import path from 'path';
+import fs from 'fs';
+import readline from 'readline/promises';
+import SparkLite from './modules/ai/Spark-Lite';
 
 const db = subscribe;
 
@@ -35,35 +40,142 @@ if (config.bot && config.bot.ws_url) {
     qbot = new XzQBot(config.bot.ws_url);
 }
 
-const BiliCookie = config.Bili_Cookie;
-
 const map_waitSend = new Map();
 const map_ARecorders = new Map<number, BiliLiveAutoRecorder>();
 
 const intercept_first: string[] = [];
 
 function initSqlite() {
-    db.serialize(() => {
-        db.run(`CREATE TABLE IF NOT EXISTS subscribe (
-            room_id INTEGER NOT NULL,
-            group_id INTEGER NOT NULL,
-            user_id INTEGER NOT NULL,
-            PRIMARY KEY (room_id, group_id, user_id)
-        );`);
-        db.run(`CREATE TABLE IF NOT EXISTS quick_subscribe (
-            group_id INTEGER NOT NULL,
-            room_id INTEGER NOT NULL,
-            PRIMARY KEY (group_id)
-        );`);
-        db.run(`CREATE TABLE IF NOT EXISTS bot_admin (
-            user_id INTEGER NOT NULL,
-            permission INTEGER NOT NULL,
-            PRIMARY KEY (user_id)
-        );`);
-        config.bot.admin.forEach(admin => {
-            db.run(`INSERT OR IGNORE INTO bot_admin (user_id, permission) VALUES (?, ?)`, [admin.qid, admin.permission]);
-            db.run(`UPDATE bot_admin SET permission = ? WHERE user_id = ?`, [admin.permission, admin.qid]);
+    return new Promise<void>((resolve) => {
+        db.serialize(() => {
+            db.run(`CREATE TABLE IF NOT EXISTS settings (
+                name VARCHAR NOT NULL,
+                value VARCHAR NOT NULL,
+                PRIMARY KEY (name)
+            );`);
+            db.run(`INSERT OR IGNORE INTO settings (name, value) VALUES (?, ?)`, ['bilibili_cookie', store.bilibili_cookie]);
+            db.run(`INSERT OR IGNORE INTO settings (name, value) VALUES (?, ?)`, ['bilibili_refresh_token', store.bilibili_refresh_token]);
+            db.run(`CREATE TABLE IF NOT EXISTS subscribe (
+                room_id INTEGER NOT NULL,
+                group_id INTEGER NOT NULL,
+                user_id INTEGER NOT NULL,
+                PRIMARY KEY (room_id, group_id, user_id)
+            );`);
+            db.run(`CREATE TABLE IF NOT EXISTS quick_subscribe (
+                group_id INTEGER NOT NULL,
+                room_id INTEGER NOT NULL,
+                PRIMARY KEY (group_id)
+            );`);
+            db.run(`CREATE TABLE IF NOT EXISTS bot_admin (
+                user_id INTEGER NOT NULL,
+                permission INTEGER NOT NULL,
+                PRIMARY KEY (user_id)
+            );`);
+            config.bot.admin.forEach(admin => {
+                db.run(`INSERT OR IGNORE INTO bot_admin (user_id, permission) VALUES (?, ?)`, [admin.qid, admin.permission]);
+                db.run(`UPDATE bot_admin SET permission = ? WHERE user_id = ?`, [admin.permission, admin.qid]);
+            })
+
+            resolve()
         })
+    })
+}
+
+function initStoreData() {
+    return new Promise<void>(async (resolve) => {
+        const askQuestion = (question: string) => {
+            return new Promise<string>((resolve) => {
+                const rl = readline.createInterface({
+                    input: process.stdin,
+                    output: process.stdout,
+                });
+                rl.question(question).then(answer => {
+                    rl.close();
+                    resolve(answer);
+                })
+            })
+        }
+
+        function toLogin() {
+            return new Promise<{ cookie: string, refresh_token: string }>(async (resolve) => {
+                const { cookie, refresh_token } = await login();
+                uploadSettings('bilibili_cookie', cookie);
+                uploadSettings('bilibili_refresh_token', refresh_token);
+                resolve({ cookie, refresh_token })
+            })
+        }
+        
+        let rows = await tools.all<[{name: string, value: string}]>('SELECT * FROM settings')
+
+        for (const row of rows) {
+            row.value = (await tools.all<[{value: string}]>('SELECT value FROM settings WHERE name = ?', [row.name]))[0].value;
+
+            switch (row.name) {
+                case 'bilibili_cookie':
+                    if (!row.value) {
+                        const { cookie } = await toLogin()
+                        row.value = cookie
+
+                        // const answer = await askQuestion('[BLR Question]\t请输入 BiliBili Cookie:\n')
+                        // if (!answer) {
+                        //     logger.error('请输入正确的 BiliBili Cookie')
+                        //     process.exit(1)
+                        // }
+                    }
+
+                    store.bilibili_cookie = row.value
+                    break;
+                case 'bilibili_refresh_token':
+                    if (!row.value) {
+                        const { refresh_token } = await toLogin()
+                        row.value = refresh_token
+
+                        // const answer = await askQuestion('[BLR Question]\t请输入 BiliBili Refresh Token:\n')
+                        // if (!answer) {
+                        //     logger.error('请输入正确的 BiliBili Refresh Token')
+                        //     process.exit(1)
+                        // }
+                    }
+                    store.bilibili_refresh_token = row.value
+                    break;
+                default:
+                    logger.warn('未知的配置项:', row.name)
+                    break;
+            }
+        }
+
+        resolve()
+    })
+
+    
+}
+
+function uploadSettings (name: keyof typeof store, value: string) {
+    db.run(`UPDATE settings SET value = ? WHERE name = ?`, [value, name]);
+    store[name] = value
+}
+
+const checkARefreshCookieInterval = 60 * 60000;
+let checkARefreshCookieTimer: NodeJS.Timer | null = null;
+
+function initACheck() {
+    return new Promise<void>(async (resolve) => {
+        // 更新Cookie
+        const func = async () => {
+            logger.info($t('TEXT_CODE_684405ad'))
+
+            const checkResponse = await checkARefreshCookie()
+
+            if (checkResponse) {
+                uploadSettings('bilibili_cookie', checkResponse.cookie);
+                uploadSettings('bilibili_refresh_token', checkResponse.refresh_token);
+            }
+
+        }
+        checkARefreshCookieTimer = setInterval(func, checkARefreshCookieInterval);
+        await func()
+
+        resolve()
     })
 }
 
@@ -108,7 +220,15 @@ const tools = {
 
 const app = async () => {
 
-    const uploader = new BiliUploader(BiliCookie, 10 * 1024 * 1024);
+    const uploader = new BiliUploader(store.bilibili_cookie, 10 * 1024 * 1024);
+    // const sparkAI  = new SparkLite({
+    //     appid: '86b65cc2',
+    //     secret: 'ZThiMjkxMGI4NmU3ZDkzMzNlYmYxM2I0',
+    //     apikey: 'c573660d3030671f2aac4e8ecf2b7811'
+    // }, chat)
+    const sparkAI  = new SparkLite({
+        apiPassword: 'PTWLgcLZGQOZIUXNcQXr:yIeFCboCZSIhrrnMGaPl'
+    }, chat)
 
     if (qbot) {
         await qbot.waitConnect
@@ -120,10 +240,43 @@ const app = async () => {
     // 机器人事件处理
     qbot?.on('message',  (data) => {
         if (data.post_type === 'message') {
+            const qid = data.sender.user_id
+            const message_id = data.message_id
+
+            // AI
+            if (data.message[0].type === 'at' && data.message[0].data.qq === data.self_id.toString()) {
+                // 收到AT消息
+
+                const allTextMessage = data.message
+                .filter((item: { type: string; }) => item.type === 'text')
+                .map((item: { data: { text: string; }; }) => item.data.text)
+                .join('')
+
+                sparkAI.sendMessage({ uid: qid.toString(), message: allTextMessage })
+                .then(resp => {
+                    if (data.message_type === 'group') {
+                        qbot?.action('send_group_msg', { 
+                            group_id: data.group_id, 
+                            message: [
+                                { type: 'reply', data: { id: data.message_id.toString() } },
+                                { type: 'text', data: { text: resp } }
+                            ]
+                        })
+                    } else if (data.message_type === 'private') {
+                        qbot?.action('send_private_msg', { 
+                            user_id: qid, 
+                            message: [
+                                { type: 'reply', data: { id: data.message_id.toString() } },
+                                { type: 'text', data: { text: resp } }
+                            ]
+                        })
+                    }
+
+                })
+            }
             if (data.message_type === 'group') {
                 const gid = data.group_id
-                const qid = data.sender.user_id
-                const message_id = data.message_id
+                
 
                 function subscribe(room_id: number, group_id: number, user_id: number) {
 
@@ -472,8 +625,7 @@ const app = async () => {
                         })
                         return
                     })
-
-                    matchCommand(command, [$t('TEXT_CODE_command.get_progress')], (result) => {
+                    matchCommand (command, [$t('TEXT_CODE_command.get_progress')], (result) => {
                         if ('id' in result) {
                             let listStr = '';
                             const list = uploader.getTask(parseInt(result.id))?.list;
@@ -487,7 +639,7 @@ const app = async () => {
                             })
                         }
                     })
-                    matchCommand(command, [$t('TEXT_CODE_command.reupload')], async (result) => {
+                    matchCommand (command, [$t('TEXT_CODE_command.reupload')], async (result) => {
                         if (!(await tools.isAdmin(qid)).isAdmin) {
                             qbot?.action('send_group_msg', {
                                 group_id: gid,
@@ -500,25 +652,175 @@ const app = async () => {
                         }
 
                         if ('id' in result) {
-                            uploader.getTask(parseInt(result.id))?.upload()
+                            const task = uploader.getTask(parseInt(result.id));
+                            if (!task) {
+                                qbot?.action('send_group_msg', {
+                                    group_id: gid,
+                                    message: [
+                                        { type: 'reply', data: { id: message_id.toString() } },
+                                        { type: 'text', data: { text: $t('TEXT_CODE_c4ac6d3f') } }
+                                    ]
+                                })
+                                return
+                            }
+                            qbot?.action('send_group_msg', {
+                                group_id: gid,
+                                message: [
+                                    { type: 'reply', data: { id: message_id.toString() } },
+                                    { type: 'text', data: { text: $t('TEXT_CODE_48bc5b59') } }
+                                ]
+                            })
+                            task.upload()
                             .then(resp => {
                                 const message = [{ type: 'text', data: { text: $t('TEXT_CODE_75fe8a3e', { replace: {
                                     bvid: resp.bvid
                                 }}) } }]
-                                qbot?.action('send_group_msg', { gid, message })
+                                qbot?.action('send_group_msg', qbot?.action('send_group_msg', { 
+                                    group_id: gid, 
+                                    message
+                                }))
                             })
                             .catch(e => {
                                 qbot?.action('send_group_msg', {
                                     group_id: gid,
                                     message: [
                                         { type: 'reply', data: { id: message_id.toString() } },
-                                        { type: 'text', data: { text: e } }
+                                        { type: 'text', data: { text: `Error -> ${e}` } }
                                     ]
                                 })
                             })
                         }
                     })
-                    matchCommand(command, [$t('TEXT_CODE_command.add_quick_subscribe')], (result) => {
+                    matchCommand (command, [$t('TEXT_CODE_command.recover')], async (result) => {
+                        if (!(await tools.isAdmin(qid)).isAdmin) {
+                            qbot?.action('send_group_msg', {
+                                group_id: gid,
+                                message: [
+                                    { type: 'reply', data: { id: message_id.toString() } },
+                                    { type: 'text', data: { text: $t('TEXT_CODE_84eda865') } }
+                                ]
+                            })
+                            return
+                        }
+
+                        if ('file' in result) {
+                            const recover_file = path.join(config.RECORD_FOLDER_PATH, result.file);
+                            if (!fs.existsSync(recover_file)) { 
+                                qbot?.action('send_group_msg', {
+                                    group_id: gid,
+                                    message: [
+                                        { type: 'reply', data: { id: message_id.toString() } },
+                                        { type: 'text', data: { text: $t('TEXT_CODE_5b3036d4') } }
+                                    ]
+                                })
+                                return
+                            }
+                            
+                            qbot?.action('send_group_msg', {
+                                group_id: gid,
+                                message: [
+                                    { type: 'reply', data: { id: message_id.toString() } },
+                                    { type: 'text', data: { text: $t('TEXT_CODE_6d7f5abd') } }
+                                ]
+                            })
+
+                            let json;
+                            try {
+                                json = JSON.parse(fs.readFileSync(recover_file, 'utf-8'));
+                            } catch (e) {
+                                qbot?.action('send_group_msg', {
+                                    group_id: gid,
+                                    message: [
+                                        { type: 'reply', data: { id: message_id.toString() } },
+                                        { type: 'text', data: { text: $t('TEXT_CODE_705c4b45') } }
+                                    ]
+                                })
+                                return
+                            }
+
+                            uploader.createTask(json.uploader.params).then(task => {
+                                qbot?.action('send_group_msg', {
+                                    group_id: gid,
+                                    message: [
+                                        { type: 'reply', data: { id: message_id.toString() } },
+                                        { type: 'text', data: { text: $t('TEXT_CODE_8e44f1b0', { replace: { id: task.id } } ) } }
+                                    ]
+                                })
+
+                                task.upload()
+                                .then(resp => {
+                                    const message = [{ type: 'text', data: { text: $t('TEXT_CODE_75fe8a3e', { replace: {
+                                        bvid: resp.bvid
+                                    }}) } }]
+                                    qbot?.action('send_group_msg', { 
+                                        group_id: gid, 
+                                        message
+                                    })
+                                })
+                                .catch(e => {
+                                    qbot?.action('send_group_msg', {
+                                        group_id: gid,
+                                        message: [
+                                            { type: 'reply', data: { id: message_id.toString() } },
+                                            { type: 'text', data: { text: `Error -> ${e}` } }
+                                        ]
+                                    })
+                                })
+                            })
+                                
+                        }
+                    })
+                    matchCommand (command, [$t('TEXT_CODE_command.get_recover_list')], () => {
+                        const fc = new FileCleaner(config.RECORD_FOLDER_PATH);
+                        fc.scan().then(result => {
+                            let str = '';
+                            if (result.unrecoveredFiles.length > 0) {
+                                str = result.unrecoveredFiles.map(item => {
+                                    return `${item}`
+                                }).join('\n');
+
+                                str += '\n\n'
+                            }
+                            
+                            str += '未恢复文件数量: ' + result.unrecoveredFiles.length
+
+                            qbot?.action('send_group_msg', {
+                                group_id: gid,
+                                message: [{ type: 'text', data: { text: str } }]
+                            })
+                        })
+                    })
+                    matchCommand (command, [$t('TEXT_CODE_command.clean_files')], async () => {
+                        if (!(await tools.isAdmin(qid)).isAdmin) {
+                            qbot?.action('send_group_msg', {
+                                group_id: gid,
+                                message: [
+                                    { type: 'reply', data: { id: message_id.toString() } },
+                                    { type: 'text', data: { text: $t('TEXT_CODE_84eda865') } }
+                                ]
+                            })
+                            return
+                        }
+
+                        const fc = new FileCleaner(config.RECORD_FOLDER_PATH);
+                        fc.clean().then(result => {
+                            
+                            qbot?.action('send_group_msg', {
+                                group_id: gid,
+                                message: [{ type: 'text', data: { text: 
+                                    `文件清理完成✅\n\n`
+                                    + '统计信息 已清理\n'
+                                    + '损坏文件: ' + result.statisticalInformation.damagedFiles + '\n'
+                                    + '异常遗留文件: ' + result.statisticalInformation.exceptionallyLeftFiles + '\n'
+                                    + '总清理文件数: ' + (result.statisticalInformation.damagedFiles + result.statisticalInformation.exceptionallyLeftFiles)
+                                    + '\n\n'
+                                    + '未恢复的文件数量: ' + result.statisticalInformation.unrecoveredFiles
+                                    + '\n\nTips: 部分为正在录制的文件，无法被清理奥😁'
+                                } }]
+                            })
+                        })
+                    })
+                    matchCommand (command, [$t('TEXT_CODE_command.add_quick_subscribe')], (result) => {
                         if ('id' in result) {
                             tools.isAdmin(qid).then( async res => {
                                 if (res.isAdmin) {
@@ -563,7 +865,7 @@ const app = async () => {
                             })
                         }
                     })
-                    matchCommand(command, [$t('TEXT_CODE_command.add_admin'), $t('TEXT_CODE_command.add_admin_2')], (result) => {
+                    matchCommand (command, [$t('TEXT_CODE_command.add_admin'), $t('TEXT_CODE_command.add_admin_2')], (result) => {
                         if ('id' in result) {
                             const user_id = parseInt(result.id);
                             tools.isAdmin(qid).then(res => {
@@ -614,7 +916,7 @@ const app = async () => {
                             })
                         }
                     })
-                    matchCommand(command, [$t('TEXT_CODE_command.remove_admin')], (result) => {
+                    matchCommand (command, [$t('TEXT_CODE_command.remove_admin')], (result) => {
                         if ('id' in result) {
                             const user_id = parseInt(result.id);
                             tools.isAdmin(qid).then(async res => {
@@ -999,7 +1301,14 @@ const app = async () => {
                 aRecorder.recorder.on('rec-error', (err) => {
                     map_groupSend.forEach(async (user_ids, group_id) => {
 
-                        const message = [{ type: 'text', data: { text: $t('TEXT_CODE_3ec89037', {replace: { id: room_id } }) } }]
+                        const message = [{ type: 'text', data: { text: $t('TEXT_CODE_3ec89037', {replace: 
+                            { 
+                                id: room_id,
+                                err: err.message || `${err}`,
+                                retry: aRecorder.recorder.errRetryTimes,
+                                maxRetry: aRecorder.recorder.MAX_ERR_RETRY_TIMES
+                            } 
+                        }) } }]
 
                         qbot?.action('send_group_msg', { group_id, message })
                     })
@@ -1009,27 +1318,30 @@ const app = async () => {
                     logger.warn(err);
                 })
 
-                aRecorder.recorder.on('rec-convert-start', () => {
+                aRecorder.recorder.on('rec-end', (file) => {
+                    map_groupSend.forEach(async (user_ids, group_id) => {
+
+                        const message = [{ type: 'text', data: { text: $t('TEXT_CODE_fcd1f98f', {replace: { id: room_id, status: statusToString('transcodeMP4Status', aRecorder.recorder.transcodeMP4 ? 1 : 0) } }) } }]
+                        qbot?.action('send_group_msg', { group_id, message })
+                    })
+                })
+
+                aRecorder.recorder.on('rec-transcode-start', () => {
                     logger.info($t('TEXT_CODE_11aaea4d'), room_id);
-
-                    return
-                    map_groupSend.forEach(async (user_ids, group_id) => {
-                        const message = [{ type: 'text', data: { text: $t('TEXT_CODE_fcd1f98f', {replace: { id: room_id } }) } }]
-                        qbot?.action('send_group_msg', { group_id, message })
-                    })
                 })
 
-                aRecorder.recorder.on('rec-convert-end', (files) => {
+                aRecorder.recorder.on('rec-transcode-end', (files) => {
                     logger.info($t('TEXT_CODE_52c48763'), room_id, files);
-                })
-
-                aRecorder.recorder.on('rec-end', async (file) => {
-                    logger.info($t('TEXT_CODE_8cb95161'), room_id);
-
                     map_groupSend.forEach(async (user_ids, group_id) => {
-                        const message = [{ type: 'text', data: { text: $t('TEXT_CODE_fcd1f98f', {replace: { id: room_id } }) } }]
+
+                        const message = [{ type: 'text', data: { text: $t('TEXT_CODE_9753a930', {replace: { id: room_id } }) } }]
                         qbot?.action('send_group_msg', { group_id, message })
                     })
+                })
+
+                // aRecorder.recorder.on('rec-transcode-skip', () => {})
+
+                aRecorder.recorder.on('rec-all-end', async (file) => {
 
                     const room_info = aRecorder.monitor.roomInfoBefore; // 下播前的直播间信息
                     
@@ -1044,14 +1356,14 @@ const app = async () => {
 
                     const user_info = await getUserInfo(room_info.uid);
 
-                    uploader.createTask({
+                    const params = {
                         file_path: file.file_path,
                         cover_base64,
                         video: {
                             title: $t('TEXT_CODE_cf485316', { replace: {
                                 name: user_info.card.name,
                                 title: room_info.title,
-                                startTime: format_time_start,
+                                startTime: room_info.live_time || format_time_start,
                                 endTime: format_time_end
                             }}) ,
                             description: $t('TEXT_CODE_560f94fc', { replace: {
@@ -1063,28 +1375,109 @@ const app = async () => {
                                 endTime: format_time_end
                             }}),
                         }
-                    }).then(({ id, upload }) => {
+                    }
+
+                    const recover_folder = path.join(config.RECORD_FOLDER_PATH, 'recovery');
+                    try {
+                        fs.mkdirSync(recover_folder, { recursive: true });
+                    } catch (error) {
+                        logger.error(error);
+                    }
+
+                    uploader.createTask(params).then(({ id, upload }) => {
                         map_groupSend.forEach(async (user_ids, group_id) => {
 
                             const message = [{ type: 'text', data: { text: $t('TEXT_CODE_7ff48a7e', {replace: { id: room_id, taskID: id } }) } }]
                             qbot?.action('send_group_msg', { group_id, message })
                         })
 
-                        upload().then((res) => {
+                        upload()
+                        .then((res) => {
+                            
                             map_groupSend.forEach(async (user_ids, group_id) => {
 
                                 const message = [{ type: 'text', data: { text: $t('TEXT_CODE_75fe8a3e', { replace: {
+                                    id: room_id,
+                                    bvid: res.bvid
+                                }}) } }]
+                                qbot?.action('send_group_msg', { group_id, message })
+                            })
+
+                            // 启动监听器
+                            const videoMonitor = new BiliVideoMonitor({
+                                bvid: res.bvid,
+                            })
+
+                            videoMonitor.startMonitor();
+                            logger.info($t('TEXT_CODE_e3ca6ddb', { replace: { id: res.bvid } }));
+
+                            videoMonitor.on('video-opening', () => {
+
+                                videoMonitor.destroy()
+                                logger.info($t('TEXT_CODE_59b2752a', { replace: { id: res.bvid } }))
+                                
+                                map_groupSend.forEach(async (user_ids, group_id) => {
+                                    const message = [{ type: 'text', data: { text: $t('TEXT_CODE_0737a8b5', { replace: {
+                                        id: res.bvid,
+                                        bvid: res.bvid
+                                    }}) } }]
+                                    qbot?.action('send_group_msg', { group_id, message })
+                                })
+
+                                // 清理文件
+                                fs.unlink(file.file_path, (err) => {
+                                    let message;
+                                    
+                                    if (err) {
+                                        logger.warn('清理文件时发送错误', err)
+                                        message = [{ type: 'text', data: { text: $t('TEXT_CODE_b3e258d3', { replace: {
+                                            err: err.message || err
+                                        }}) } }]
+                                    } else {
+                                        message = [{ type: 'text', data: { text: $t('TEXT_CODE_b3e258d3') } }]
+                                    }
+
+                                    map_groupSend.forEach(async (user_ids, group_id) => {
+                                        message
+                                        qbot?.action('send_group_msg', { group_id, message })
+                                    })
+                                })
+                            })
+
+                            map_groupSend.forEach(async (user_ids, group_id) => {
+                                const message = [{ type: 'text', data: { text: $t('TEXT_CODE_634b96fd', { replace: {
+                                    id: res.bvid,
                                     bvid: res.bvid
                                 }}) } }]
                                 qbot?.action('send_group_msg', { group_id, message })
                             })
 
                             logger.info($t('TEXT_CODE_aed04805'), room_id, res);
-                        }).catch((err) => {
+                        })
+                        .catch((err) => {
+                            
+                            const recover_file = `${path.basename(file.file_path)}_recovery.json`;
+                            fs.writeFileSync(path.join(recover_folder, recover_file), JSON.stringify({
+                                type: 'uploader-err-recovery',
+                                time: Date.now(),
+                                time_: moment().format('YYYY-MM-DD HH:mm:ss'),
+                                error: `${err}`,
+                                room_id,
+                                uploader: {
+                                    params
+                                },
+                                manual_recovery: {
+                                    ...params.video
+                                }
+                            }, null, 2));
+
                             alertError(err, $t('TEXT_CODE_4bf8d0a0'))
 
                             map_groupSend.forEach(async (user_ids, group_id) => {
-                                const message = [{ type: 'text', data: { text: $t('TEXT_CODE_35bd8fb2') } }]
+                                const message = [{ type: 'text', data: { text: $t('TEXT_CODE_35bd8fb2', { replace: { 
+                                    id: room_id,
+                                    file: recover_file 
+                                } }) } }]
                                 qbot?.action('send_group_msg', { group_id, message })    
                             })
                         })
@@ -1153,9 +1546,14 @@ const app = async () => {
 (async () => {
     try {
         logger.info($t('TEXT_CODE_70bb782b'));
-        initSqlite();
+
+        logger.info($t('TEXT_CODE_03cba728'));
+        await initSqlite();
+        await initStoreData();
+        await initACheck();
 
         await app();
+        logger.info($t('TEXT_CODE_60c96648'));
         logger.info($t('TEXT_CODE_1580a4fb'));
 
     } catch (error) {

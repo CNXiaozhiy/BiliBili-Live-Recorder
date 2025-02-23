@@ -11,6 +11,10 @@ const statusMap = {
         0: 'TEXT_CODE_status.rec_0',
         1: 'TEXT_CODE_status.rec_1',
         2: 'TEXT_CODE_status.rec_2'
+    },
+    transcodeMP4Status: {
+        0: 'TEXT_CODE_status.rec_transcode_0',
+        1: 'TEXT_CODE_status.rec_transcode_1',
     }
 }
 

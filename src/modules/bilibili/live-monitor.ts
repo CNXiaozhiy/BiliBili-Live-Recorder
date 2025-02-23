@@ -1,11 +1,11 @@
-import { BiliLiveMonitorOptions, BiliLiveRoomInfo, IBiliLiveMonitor } from "index";
+import { BiliLiveMonitorOptions, BiliLiveRoomInfo, IBiliMonitor } from "index";
 
-import { EventEmitter } from "../core/events";
-import { getLiveRoomInfo } from "./bilibili-api";
+import { EventEmitter } from "../../core/events";
+import { getLiveRoomInfo } from "./api";
 
 type BiliLiveMonitorEvents = 'data' | 'status-change' | 'live-start' | 'live-end' | 'live-slideshow' | 'error';
 
-export default class BiliLiveMonitor extends EventEmitter<BiliLiveMonitorEvents> implements IBiliLiveMonitor  {
+export default class BiliLiveMonitor extends EventEmitter<BiliLiveMonitorEvents> implements IBiliMonitor  {
     roomId: number;
     pollInterval: null | NodeJS.Timeout = null;
     oldLiveStatus: null | number = null;

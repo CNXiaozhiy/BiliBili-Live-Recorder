@@ -4,7 +4,6 @@ import path from 'path';
 import logger from '../logger';
 
 interface IConfigJson {
-    Bili_Cookie: string;
     RECORD_FOLDER_PATH: string;
     FFMPEG_BIN_FOLDER: string;
 
@@ -24,7 +23,8 @@ const cwd = process.cwd();
 const files = {
     config: path.join(cwd,'./config.json'),
     db: {
-        subscribe: path.join(cwd,'./data/subscribe.db')
+        subscribe: path.join(cwd,'./data/subscribe.db'),
+        chat: path.join(cwd,'./data/chat.db')
     }
 }
 
@@ -41,10 +41,10 @@ if (!fs.existsSync(files.config)) {
 // 初始化
 let config: IConfigJson;
 let subscribe: sqlite3.Database;
+let chat: sqlite3.Database;
 
 try {
     config = JSON.parse(fs.readFileSync(files.config, 'utf-8'));
-    if (!config.Bili_Cookie) logger.warn('Bili_Cookie 未配置，将无法使用 BiliUploader 上传视频');
     if (!config.bot || !config.bot.ws_url) logger.warn('OneBot 适配器未安装！')
     if (!config.FFMPEG_BIN_FOLDER || !config.Language || !config.RECORD_FOLDER_PATH) throw Error('参数不完整');
 } catch (e) {
@@ -62,7 +62,25 @@ try {
     process.exit(0);
 }
 
+try {
+    chat = new sqlite3.Database(files.db.chat, function(e) {
+        if (e) throw e;
+    }); 
+} catch (e) {
+    logger.error(`加载数据库文件 ${files.db.chat} 出错：+ ${e}`);
+    logger.notice('若无重要数据，请手动删除数据库后重试');
+    process.exit(0);
+}
+
+let store = {
+    bilibili_cookie: '',
+    bilibili_refresh_token: '',
+};
+
 export {
+    cwd,
     config,
-    subscribe
+    subscribe,
+    chat,
+    store
 };

@@ -2,40 +2,42 @@ import fs from 'fs';
 import path from 'path';
 import ffmpeg from 'fluent-ffmpeg';
 import moment from 'moment';
-import { config } from '../lib/d';
+import { config } from '../../lib/d';
 
-import { getLiveRoomInfo, getLiveStreamUrl } from './bilibili-api';
+import { getLiveRoomInfo, getLiveStreamUrl } from './api';
 import { BiliLiveRecorderOptions } from 'index';
-import { EventEmitter } from '../core/events';
-import { alertError } from '../core/error-alarms';
-import { $t } from '../i18n';
-import { startProxyServer } from './proxy';
+import { EventEmitter } from '../../core/events';
+import { alertError } from '../../core/error-alarms';
+import { $t } from '../../i18n';
+import { startProxyServer } from '../../lib/proxy';
+import FileCleaner from '../system/live-recoder-file-cleaner';
+import lockFile from 'proper-lockfile';
+import logger from '../../logger';
 
 const PORT = 3005;
 const proxyServer = startProxyServer(3005);
 const proxyServerUrl = `http://127.0.0.1:${PORT}`;
 
-// ffmpeg.setFfmpegPath(path.join(__dirname, '../../ffmpeg/bin/ffmpeg'));
-// ffmpeg.setFfprobePath(path.join(__dirname, '../../fffmpeg/bin/ffprobe'));
-// ffmpeg.setFlvtoolPath(path.join(__dirname, '../../ffmpeg/bin/flvtool'));
-
 ffmpeg.setFfmpegPath(path.join(config.FFMPEG_BIN_FOLDER, './ffmpeg'));
 ffmpeg.setFfprobePath(path.join(config.FFMPEG_BIN_FOLDER, './ffprobe'));
 ffmpeg.setFlvtoolPath(path.join(config.FFMPEG_BIN_FOLDER, './flvtool'));
 
-type BiliRecorderEventTypes = 'error' | 'rec-start' | 'rec-progress' | 'rec-error' | 'rec-warn' | 'rec-end' | 'rec-convert-start' | 'rec-convert-end' | 'rec-convert-error';
+type BiliRecorderEventTypes = 'error' | 'rec-start' | 'rec-progress' | 'rec-error' | 'rec-warn' | 'rec-end' | 'rec-transcode-start' | 'rec-transcode-skip' | 'rec-transcode-end' | 'rec-all-end' | 'rec-transcode-error';
 
 export default class BiliLiveRecorder extends EventEmitter<BiliRecorderEventTypes> {
     roomId: number;
     saveRecordFolder: string;
+    transcodeMP4: boolean;
     segmentFiles: string[] = [];
+
+    fileCleaner: FileCleaner;
 
     recStatus: 0 | 1 | 2 = 0;
     recStartTime: null | Date = null;
     recEndTime: null | Date = null;
 
     recCommand: null | ffmpeg.FfmpegCommand = null;
-    recConvertCommmand: null | ffmpeg.FfmpegCommand = null;
+    recTranscodeCommmand: null | ffmpeg.FfmpegCommand = null;
     recProgress: null | {
         frames: number;
         currentFps: number;
@@ -47,11 +49,18 @@ export default class BiliLiveRecorder extends EventEmitter<BiliRecorderEventType
 
     forceStop: boolean = false;
 
-    constructor({ roomId, saveRecordFolder = '' }: BiliLiveRecorderOptions) {
+    errRetryTimes: number = 0;
+
+    MAX_ERR_RETRY_TIMES: number = 5;
+
+    constructor({ roomId, saveRecordFolder = '', transcodeMP4 = false }: BiliLiveRecorderOptions) {
         super();
 
         this.roomId = roomId;
         this.saveRecordFolder = saveRecordFolder;
+        this.transcodeMP4 = transcodeMP4;
+
+        this.fileCleaner = new FileCleaner(saveRecordFolder);
     }
 
     private generateRecordFilePath(): string {
@@ -83,6 +92,16 @@ export default class BiliLiveRecorder extends EventEmitter<BiliRecorderEventType
     }
 
     public async rec() {
+        if ((await getLiveRoomInfo(this.roomId)).live_status !== 1) return;
+
+        let streamUrl;
+        try {
+            streamUrl = await getLiveStreamUrl(this.roomId);
+        } catch (e) {
+            setTimeout(() => this.rec(), 5000);
+            return
+        }
+
         const outputFilePath = this.generateRecordFilePath();
         this.segmentFiles.push(outputFilePath);
         
@@ -112,8 +131,8 @@ export default class BiliLiveRecorder extends EventEmitter<BiliRecorderEventType
             }
         }
 
-        const streamUrl = await getLiveStreamUrl(this.roomId);
-        const proxyStreamUrl = streamUrl.startsWith('https://d1') ? streamUrl : `${proxyServerUrl}/?url=${Buffer.from(streamUrl).toString('base64')}`;
+        // const proxyStreamUrl = streamUrl.startsWith('https://d1') ? streamUrl : `${proxyServerUrl}/?url=${Buffer.from(streamUrl).toString('base64')}`;
+        const proxyStreamUrl = `${proxyServerUrl}/?url=${Buffer.from(streamUrl).toString('base64')}`;
         
         const extname = path.extname(streamUrl); // 再次确认直播流文件格式
 
@@ -155,24 +174,32 @@ export default class BiliLiveRecorder extends EventEmitter<BiliRecorderEventType
                     this.emit('rec-end', { file_path: mergedFilePath });
 
                     // 转码 -> mp4
-                    if (extname !== '.mp4') {
+                    if (extname !== '.mp4' && this.transcodeMP4) {
                         const mp4_file_path = mergedFilePath.replace('.flv', '.mp4');
-                        this.recConvertCommmand = ffmpeg(mergedFilePath)
+                        this.recTranscodeCommmand = ffmpeg(mergedFilePath)
                         .output(mp4_file_path)
                         .on('start', (commandLine) => {
-                            this.emit('rec-convert-start', commandLine);
+                            this.emit('rec-transcode-start', commandLine);
                         })
                         .on('end', () => {
-                            this.emit('rec-convert-end', {
+                            this.emit('rec-transcode-end', {
+                                file_path: mp4_file_path
+                            })
+                            this.emit('rec-all-end', {
                                 file_path: mp4_file_path
                             })
                         })
                         .on('error', (err) => {
-                            this.emit('rec-convert-error', err);
+                            this.emit('rec-transcode-error', err);
                             alertError(err, $t('TEXT_CODE_ef167dc9'));
                         })
 
-                        this.recConvertCommmand.run();
+                        this.recTranscodeCommmand.run();
+                    } else {
+                        this.emit('rec-transcode-skip');
+                        this.emit('rec-all-end', {
+                            file_path: mergedFilePath
+                        })
                     }
                 }
             } catch (e) {
@@ -182,13 +209,44 @@ export default class BiliLiveRecorder extends EventEmitter<BiliRecorderEventType
         })
         .on('error', (err) => {
             if (err.message.includes('ffmpeg was killed with signal')) return;
+
+            this.errRetryTimes++;
+            if (this.errRetryTimes > this.MAX_ERR_RETRY_TIMES) {
+                this.emit('rec-error', new Error('已到达最大重试次数，已结束录制。'));
+                this.errRetryTimes = 0;
+                return
+            }
+
+            let timeout = 3000;
+
+            if (err.message.includes('Error opening input files: Server')) timeout = 5000;
+            if (err.message.includes('Conversion failed')) {
+                this.emit('rec-error', new Error('硬盘空间不足，已结束录制并启动文件清理任务。文件清理完成后自动重新开始录制。'));
+
+                this.segmentFiles.forEach((file) => {
+                    try {
+                        lockFile.lockSync(file)
+                    } catch (e) {
+                        logger.warn('文件锁定失败', e)
+                    }
+                })
+                this.fileCleaner.clean(this.segmentFiles.map((file) => path.basename(file))).then(() => this.rec());
+                this.segmentFiles.forEach((file) => {
+                    try {
+                        lockFile.unlockSync(file)
+                    } catch (e) {
+                        logger.warn('文件解锁失败', e)
+                    }
+                })
+                return
+            }
+
             this.emit('rec-error', err);
 
             alertError(err, $t('TEXT_CODE_4c7d3c19'));
 
             delNullSegmentFiles(outputFilePath);
-            
-            this.rec();
+            setTimeout(() => this.rec(), timeout);
         })
         .on('stderr', (stderrLine) => {
         })
@@ -238,7 +296,7 @@ export default class BiliLiveRecorder extends EventEmitter<BiliRecorderEventType
 
     public destroy() {
         if (this.recCommand) this.recCommand.kill('SIGKILL');
-        if (this.recConvertCommmand) this.recConvertCommmand.kill('SIGKILL');
+        if (this.recTranscodeCommmand) this.recTranscodeCommmand.kill('SIGKILL');
 
         this.off('all')
     }
