@@ -52,7 +52,6 @@ The configuration file `config.json` is located at the root of the project (same
 
 ```json
 {
-  "Bili_Cookie": "",
   "RECORD_FOLDER_PATH": "/path/to/records/",
   "FFMPEG_BIN_FOLDER": "/path/to/ffmpeg/bin",
   "Language": "en_us",
@@ -70,7 +69,6 @@ The configuration file `config.json` is located at the root of the project (same
 
 **Explanation:**
 
-- `Bili_Cookie`: Your Bilibili Cookie (login to get it).
 - `RECORD_FOLDER_PATH`: Folder where video recordings will be saved.
 - `FFMPEG_BIN_FOLDER`: Path to FFmpeg's `bin` directory.
 - `Language`: Preferred language (e.g., `en_us` for English).

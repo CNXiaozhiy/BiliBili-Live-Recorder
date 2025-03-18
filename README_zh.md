@@ -52,7 +52,6 @@
 
 ```json
 {
-  "Bili_Cookie": "",
   "RECORD_FOLDER_PATH": "/path/to/records/",
   "FFMPEG_BIN_FOLDER": "/path/to/ffmpeg/bin",
   "Language": "zh_cn",
@@ -70,7 +69,6 @@
 
 **解释：**
 
-- `Bili_Cookie`: 哔哩哔哩的 Cookie（登录后获取）。
 - `RECORD_FOLDER_PATH`: 录制视频文件保存的文件夹。
 - `FFMPEG_BIN_FOLDER`: FFmpeg 的 bin 目录路径。
 - `Language`: 首选语言（例如，`zh_cn` 为中文）。
