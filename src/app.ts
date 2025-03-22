@@ -490,7 +490,7 @@ const app = async () => {
                         const aRecorder = map_ARecorders.get(row.room_id);
                         if (!aRecorder) return;
                         if (aRecorder.recorder.recStatus === 1) {
-                          await aRecorder.recorder.stop().force();
+                          await aRecorder.recorder.stop.force();
                         }
                       });
 
@@ -526,20 +526,17 @@ const app = async () => {
                         ],
                       });
                     } else {
-                      aRecorder.recorder
-                        .stop()
-                        .force()
-                        .then(() => {
-                          qbot?.action("send_group_msg", {
-                            group_id: gid,
-                            message: [
-                              { type: "reply", data: { id: message_id.toString() } },
-                              { type: "text", data: { text: $t("TEXT_CODE_2ebe69e5") } },
-                            ],
-                          });
-
-                          map_waitSend.delete(`${gid}_${qid}`);
+                      aRecorder.recorder.stop.force().then(() => {
+                        qbot?.action("send_group_msg", {
+                          group_id: gid,
+                          message: [
+                            { type: "reply", data: { id: message_id.toString() } },
+                            { type: "text", data: { text: $t("TEXT_CODE_2ebe69e5") } },
+                          ],
                         });
+
+                        map_waitSend.delete(`${gid}_${qid}`);
+                      });
                     }
                   } catch (error: any) {
                     error.message !== $t("TEXT_CODE_7f34883a") &&
@@ -1450,7 +1447,7 @@ const app = async () => {
           logger.info($t("TEXT_CODE_d3da5e2d"), room_id);
         });
 
-        aRecorder.recorder.on("rec-error", (err) => {
+        /* aRecorder.recorder.on("rec-error", (err) => {
           map_groupSend.forEach(async (user_ids, group_id) => {
             const message = [
               {
@@ -1471,6 +1468,7 @@ const app = async () => {
             qbot?.action("send_group_msg", { group_id, message });
           });
         });
+        */
 
         aRecorder.recorder.on("rec-warn", (err) => {
           logger.warn(err);

@@ -12,6 +12,8 @@ import { $t } from "../../i18n";
 import { startProxyServer } from "../../lib/proxy";
 import FileCleaner from "../system/live-recoder-file-cleaner";
 import logger from "../../logger";
+import axios from "axios";
+import { checkStreamStatus } from "../../tools";
 
 const PORT = 3005;
 const proxyServer = startProxyServer(3005);
@@ -61,7 +63,7 @@ export default class BiliLiveRecorder extends EventEmitter<BiliRecorderEventType
 
   errRetryTimes: number = 0;
 
-  MAX_ERR_RETRY_TIMES: number = 5;
+  MAX_ERR_RETRY_TIMES: number = 10;
 
   constructor({ roomId, saveRecordFolder = "", transcodeMP4 = false }: BiliLiveRecorderOptions) {
     super();
@@ -80,55 +82,32 @@ export default class BiliLiveRecorder extends EventEmitter<BiliRecorderEventType
     );
   }
 
-  public stop() {
-    return {
-      kill: async () => {
-        if (!this.recCommand || this.recCommand.ffmpegProc || !this.recCommand.ffmpegProc.stdin)
-          return;
-        this.recCommand.kill("SIGKILL");
-        this.recCommand = null;
-        this.forceStop = true;
-        this.recStatus = 0;
+  public stop = {
+    kill: async () => {
+      if (!this.recCommand || this.recCommand.ffmpegProc || !this.recCommand.ffmpegProc.stdin)
+        return;
+      this.recCommand.kill("SIGKILL");
+      this.recCommand = null;
+      this.forceStop = true;
+      this.recStatus = 0;
 
-        return this;
-      },
-      force: async () => {
-        if (!this.recCommand || !this.recCommand.ffmpegProc || !this.recCommand.ffmpegProc.stdin)
-          return;
-        const stdin = this.recCommand.ffmpegProc.stdin;
-        await stdin.write("q");
-        this.recCommand = null;
-        this.forceStop = true;
-        this.recStatus = 0;
+      return this;
+    },
+    force: async () => {
+      if (!this.recCommand || !this.recCommand.ffmpegProc || !this.recCommand.ffmpegProc.stdin)
+        return;
+      const stdin = this.recCommand.ffmpegProc.stdin;
+      await stdin.write("q");
+      this.recCommand = null;
+      this.forceStop = true;
+      this.recStatus = 0;
 
-        return this;
-      },
-    };
-  }
+      return this;
+    },
+  };
 
   public async rec() {
-    if ((await getLiveRoomInfo(this.roomId)).live_status !== 1) return;
-
-    let streamUrl;
-    try {
-      streamUrl = await getLiveStreamUrl(this.roomId);
-    } catch (e) {
-      setTimeout(() => this.rec(), 5000);
-      return;
-    }
-
-    const outputFilePath = this.generateRecordFilePath();
-    this.segmentFiles.push(outputFilePath);
-
-    if (fs.existsSync(outputFilePath)) {
-      try {
-        fs.unlinkSync(outputFilePath);
-      } catch (e) {
-        this.emit("rec-error", e);
-        return;
-      }
-    }
-
+    // 辅助函数
     const delNullSegmentFiles = (file?: string) => {
       if (!file) {
         this.segmentFiles.forEach(delNullSegmentFiles, this);
@@ -147,13 +126,85 @@ export default class BiliLiveRecorder extends EventEmitter<BiliRecorderEventType
         }
       }
     };
+    const recEndFunc = async () => {
+      this.recEndTime = new Date();
+      this.recStatus = 0;
 
-    // const proxyStreamUrl = streamUrl.startsWith('https://d1') ? streamUrl : `${proxyServerUrl}/?url=${Buffer.from(streamUrl).toString('base64')}`;
+      delNullSegmentFiles();
+
+      const mergedFilePath = await this.mergeSegmentFiles();
+
+      this.segmentFiles = [];
+      this.emit("rec-end", { file_path: mergedFilePath });
+
+      const extname = path.extname(mergedFilePath);
+
+      // 转码 -> mp4
+      if (extname !== ".mp4" && this.transcodeMP4) {
+        const mp4_file_path = mergedFilePath.replace(".flv", ".mp4");
+        this.recTranscodeCommmand = ffmpeg(mergedFilePath)
+          .output(mp4_file_path)
+          .on("start", (commandLine) => {
+            this.emit("rec-transcode-start", commandLine);
+          })
+          .on("end", () => {
+            this.emit("rec-transcode-end", {
+              file_path: mp4_file_path,
+            });
+            this.emit("rec-all-end", {
+              file_path: mp4_file_path,
+            });
+          })
+          .on("error", (err) => {
+            this.emit("rec-transcode-error", err);
+            alertError(err, $t("TEXT_CODE_ef167dc9"));
+          });
+
+        this.recTranscodeCommmand.run();
+      } else {
+        this.emit("rec-transcode-skip");
+        this.emit("rec-all-end", {
+          file_path: mergedFilePath,
+        });
+      }
+    };
+
+    // 直播间是否开播
+    if ((await getLiveRoomInfo(this.roomId)).live_status !== 1) {
+      if (this.recStatus !== 0) {
+        recEndFunc();
+      }
+      return;
+    }
+
+    // 获取直播流地址
+    let streamUrl;
+    try {
+      streamUrl = await getLiveStreamUrl(this.roomId);
+    } catch (e) {
+      setTimeout(() => this.rec(), 5000);
+      return;
+    }
+
+    // 等待代理直播流启动
+    await proxyServer;
+
     const proxyStreamUrl = `${proxyServerUrl}/?url=${Buffer.from(streamUrl).toString("base64")}`;
 
-    const extname = path.extname(streamUrl); // 再次确认直播流文件格式
+    // 测试直播流是否可用 获取返回状态码
+    const statusCode = await checkStreamStatus(proxyStreamUrl);
+    if (statusCode !== 200) {
+      // 直播流不可用
+      logger.warn(`[Live Recorder]\t${this.roomId} 直播流不可用，状态码:${statusCode}`);
+      setTimeout(() => this.rec(), 3000);
+      return;
+    }
 
-    await proxyServer;
+    // 生成直播录制文件名
+    const outputFilePath = this.generateRecordFilePath();
+    this.segmentFiles.push(outputFilePath);
+
+    // 开始直播录制
     this.recCommand = ffmpeg(proxyStreamUrl)
       .output(outputFilePath)
       .outputOptions("-c copy")
@@ -162,11 +213,10 @@ export default class BiliLiveRecorder extends EventEmitter<BiliRecorderEventType
       .addOption("-reconnect_at_eof", "1")
       .addOption("-reconnect_streamed", "1")
       .addOption("-reconnect_delay_max", "5")
-
       .on("start", (commandLine) => {
         if (this.segmentFiles.length === 1) this.recStartTime = new Date();
-        this.emit("rec-start", commandLine);
         this.recStatus = 1;
+        this.emit("rec-start", commandLine);
       })
       .on("progress", (progress) => {
         this.recProgress = progress;
@@ -176,48 +226,12 @@ export default class BiliLiveRecorder extends EventEmitter<BiliRecorderEventType
         try {
           const resp = await getLiveRoomInfo(this.roomId);
           if (resp.live_status === 1 && !this.forceStop) {
-            delNullSegmentFiles(outputFilePath);
             this.emit("rec-warn", $t("TEXT_CODE_1b8c5033", { replace: { id: this.roomId } }));
+            // 继续录制
             this.rec();
           } else {
             if (this.forceStop) this.forceStop = false;
-            this.recEndTime = new Date();
-            this.recStatus = 0;
-
-            delNullSegmentFiles();
-
-            const mergedFilePath = await this.mergeSegmentFiles();
-            this.segmentFiles = [];
-            this.emit("rec-end", { file_path: mergedFilePath });
-
-            // 转码 -> mp4
-            if (extname !== ".mp4" && this.transcodeMP4) {
-              const mp4_file_path = mergedFilePath.replace(".flv", ".mp4");
-              this.recTranscodeCommmand = ffmpeg(mergedFilePath)
-                .output(mp4_file_path)
-                .on("start", (commandLine) => {
-                  this.emit("rec-transcode-start", commandLine);
-                })
-                .on("end", () => {
-                  this.emit("rec-transcode-end", {
-                    file_path: mp4_file_path,
-                  });
-                  this.emit("rec-all-end", {
-                    file_path: mp4_file_path,
-                  });
-                })
-                .on("error", (err) => {
-                  this.emit("rec-transcode-error", err);
-                  alertError(err, $t("TEXT_CODE_ef167dc9"));
-                });
-
-              this.recTranscodeCommmand.run();
-            } else {
-              this.emit("rec-transcode-skip");
-              this.emit("rec-all-end", {
-                file_path: mergedFilePath,
-              });
-            }
+            recEndFunc();
           }
         } catch (e) {
           console.error(e);
@@ -228,15 +242,13 @@ export default class BiliLiveRecorder extends EventEmitter<BiliRecorderEventType
         if (err.message.includes("ffmpeg was killed with signal")) return;
 
         this.errRetryTimes++;
-        if (this.errRetryTimes > this.MAX_ERR_RETRY_TIMES) {
+        if (this.errRetryTimes >= this.MAX_ERR_RETRY_TIMES) {
           this.emit("rec-error", new Error("已到达最大重试次数，已结束录制。"));
           this.errRetryTimes = 0;
+          recEndFunc();
           return;
         }
 
-        let timeout = 3000;
-
-        if (err.message.includes("Error opening input files: Server")) timeout = 5000;
         if (err.message.includes("Conversion failed")) {
           this.emit(
             "rec-error",
@@ -254,7 +266,7 @@ export default class BiliLiveRecorder extends EventEmitter<BiliRecorderEventType
         const getTranslatedErrorMessage = (message: string): string => {
           const translatedErrorMessages = {
             "Error opening input files: Server returned 5XX Server Error reply":
-              "录制速度过快 哔哩哔哩返回服务器错误",
+              "哔哩哔哩返回服务器错误",
           };
 
           for (const key in translatedErrorMessages) {
@@ -268,12 +280,8 @@ export default class BiliLiveRecorder extends EventEmitter<BiliRecorderEventType
 
         this.emit("rec-error", new Error(getTranslatedErrorMessage(err.message)));
 
-        alertError(err, $t("TEXT_CODE_4c7d3c19"));
-
-        delNullSegmentFiles(outputFilePath);
-        setTimeout(() => this.rec(), timeout);
-      })
-      .on("stderr", (stderrLine) => {});
+        setTimeout(() => this.rec(), 3000);
+      });
 
     // 开始录制
     this.recCommand.run();
@@ -306,12 +314,7 @@ export default class BiliLiveRecorder extends EventEmitter<BiliRecorderEventType
         .on("end", () => {
           fs.unlinkSync(inputListFilePath); // 删除临时文件
 
-          try {
-            this.segmentFiles.forEach(fs.unlinkSync);
-          } catch (e) {
-            reject(e);
-            return;
-          }
+          this.segmentFiles.forEach(fs.unlinkSync);
           resolve();
         })
         .on("error", (err) => {
